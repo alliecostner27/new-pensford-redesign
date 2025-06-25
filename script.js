@@ -178,7 +178,6 @@ function drawChart(startDate = new Date(2019, 0, 1), endDate = new Date(2025, 11
     return;
   }
 
-  // Store the active range globally so the table uses the same
   window.currentStartDate = startDate;
   window.currentEndDate = endDate;
 
@@ -245,14 +244,14 @@ function drawChart(startDate = new Date(2019, 0, 1), endDate = new Date(2025, 11
     };
 
     const colorMap = {
-      "1M Term SOFR": "#1976d2",              // Blue
-      "3M Term SOFR": "#388e3c",              // Green
-      "30D Average SOFR (NYFED)": "#f57c00"   // Orange
+      "1M Term SOFR": "#1976d2",              
+      "3M Term SOFR": "#388e3c",              
+      "30D Average SOFR (NYFED)": "#f57c00"   
     };
 
     for (let i = 1; i < header.length; i++) {
       const label = header[i];
-      const color = colorMap[label] || "#9e9e9e"; // fallback gray
+      const color = colorMap[label] || "#9e9e9e"; 
 
       const seriesOptions = {
         color: highlightActuals && label.includes("Actual") ? "#d32f2f" : color
@@ -271,7 +270,7 @@ function drawChart(startDate = new Date(2019, 0, 1), endDate = new Date(2025, 11
     const chart = new google.visualization.LineChart(document.getElementById("chart_div"));
     chart.draw(data, options);
 
-    // ✅ Update the table to match current view
+    //Update the table to match current view
     renderForwardCurveTable(startDate, endDate, viewMode);
 
   } catch (err) {
@@ -361,7 +360,7 @@ document.addEventListener("DOMContentLoaded", populateSinceDateSelectors);
 function populateAsOfDateSelectors() {
   const today = new Date();
   const day = today.getDate();
-  const month = today.getMonth(); // 0-indexed
+  const month = today.getMonth(); 
   const year = today.getFullYear();
 
   const asOfDay = document.getElementById("asOfDay");
@@ -408,7 +407,7 @@ function populateAsOfDateSelectors() {
   if (asOfYear) {
     for (let y = year - 5; y <= year + 5; y++) {
       const opt = document.createElement("option");
-      opt.value = y;
+      opt.value = y.toString();
       opt.textContent = y;
       if (y === year) opt.selected = true;
       asOfYear.appendChild(opt);
