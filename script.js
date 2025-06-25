@@ -21,7 +21,7 @@ let cachedParams = {};
 let cachedGroupedData = [];
 function transformData(rawData) {
   if (!rawData || rawData.length < 2) {
-    console.warn("❌ No raw data available for transformation.");
+    console.warn("No raw data available for transformation.");
     return [];
   }
 
@@ -29,7 +29,7 @@ function transformData(rawData) {
   const resetDateIndex = header.indexOf("Reset Date");
 
   if (resetDateIndex === -1) {
-    console.error("❌ 'Reset Date' column missing.");
+    console.error("'Reset Date' column missing.");
     return [];
   }
 
@@ -60,13 +60,13 @@ function transformData(rawData) {
 
 function processDataAndRedraw() {
   if (!fullData || fullData.length < 2) {
-    console.error("❌ No full data to process.");
+    console.error("No full data to process.");
     return;
   }
 
   const dateIndex = headers.indexOf("Reset Date");
   if (dateIndex === -1) {
-    console.error("❌ 'Reset Date' column not found.");
+    console.error("'Reset Date' column not found.");
     return;
   }
 
@@ -92,7 +92,7 @@ function processDataAndRedraw() {
   const startDate = inputStart ? new Date(inputStart) : defaultStart;
   const endDate = inputEnd ? new Date(inputEnd) : defaultEnd;
 
-  console.log("📅 Using Start:", startDate, "End:", endDate);
+  console.log("Using Start:", startDate, "End:", endDate);
 
   // Filter rows within date range
   const filteredRows = fullData.slice(1).filter(row => {
@@ -100,9 +100,9 @@ function processDataAndRedraw() {
     return d >= startDate && d <= endDate;
   });
 
-  console.log("✅ Parsed rows in date range:", filteredRows.length);
+  console.log("Parsed rows in date range:", filteredRows.length);
   if (!filteredRows.length) {
-    console.warn("⚠️ No data rows passed the date range filter.");
+    console.warn("No data rows passed the date range filter.");
   }
 
   // Build transformedData to be used by drawChart
@@ -117,16 +117,16 @@ function loadData() {
   fetch(url)
     .then((response) => response.json())
     .then((data) => {
-      console.log("✅ Raw fetched data:", data);
+      console.log("Raw fetched data:", data);
       if (!data || data.length < 2) {
-        console.error("❌ Insufficient data from Apps Script");
+        console.error("Insufficient data from Apps Script");
         return;
       }
 
       const transformed = transformData(data);
 
       if (transformed.length < 2) {
-        console.error("❌ No valid rows after transformation.");
+        console.error("No valid rows after transformation.");
         return;
       }
 
@@ -135,7 +135,7 @@ function loadData() {
       processDataAndRedraw();
     })
     .catch((error) => {
-      console.error("❌ Fetch error:", error);
+      console.error("Fetch error:", error);
     });
 }
 
@@ -178,7 +178,7 @@ function drawChart(startDate = new Date(2019, 0, 1), endDate = new Date(2025, 11
     return;
   }
 
-  console.log("🎯 Drawing chart with range:", startDate, "to", endDate);
+  console.log("Drawing chart with range:", startDate, "to", endDate);
 
   let dataArray = transformedData;
 
@@ -207,12 +207,17 @@ function drawChart(startDate = new Date(2019, 0, 1), endDate = new Date(2025, 11
         format: 'yyyy',
         slantedText: false,
         ticks: generateYearlyTicks(startDate, endDate),
-        textStyle: { fontSize: 12 }
+        textStyle: { fontSize: 12 },
+        gridlines: {color: 'transparent'},
       },
       vAxis: {
-        title: '%',
         format: '#.##%',
-        textStyle: { fontSize: 12 }
+        textStyle: { fontSize: 12 },
+        gridlines: {color: '#e0e0e0'},
+        baselineColor: '#333',
+        baseline: 0,
+        textPosition: 'out',
+        minorGridlines: { color: 'transparent' },
       },
       series: {}
     };
@@ -244,7 +249,7 @@ function drawChart(startDate = new Date(2019, 0, 1), endDate = new Date(2025, 11
     const chart = new google.visualization.LineChart(document.getElementById("chart_div"));
     chart.draw(data, options);
   } catch (err) {
-    console.error("❌ Chart rendering error:", err);
+    console.error("Chart rendering error:", err);
   }
 }
 
@@ -539,7 +544,7 @@ document.addEventListener("DOMContentLoaded", () => {
   drawChart(currentStartDate, currentEndDate);
 });
 
-function renderForwardCurveTable(startDateInput, endDateInput, mode = 'daily') {
+function renderForwardCurveTable(startDate, endDate, mode = 'daily') {
   if (!transformedData || transformedData.length < 2) {
     console.warn("No transformed data available.");
     return;
@@ -548,63 +553,61 @@ function renderForwardCurveTable(startDateInput, endDateInput, mode = 'daily') {
   const container = document.getElementById("forwardCurveTableContainer");
   if (!container) return;
 
-  const parseDate = val => {
-    const d = new Date(val);
-    return isNaN(d.getTime()) ? null : d;
-  };
-
-  const startDate = parseDate(startDateInput) || new Date(new Date().getFullYear(), 0, 1);
-  const endDate = parseDate(endDateInput) || new Date(new Date().getFullYear() + 10, 11, 31);
-
   const fullHeader = transformedData[0];
   const dateIndex = 0;
 
-  // Columns to keep: always keep date column (index 0), plus any visible checkboxes
+  // ✅ Columns to display: Reset Date + selected checkboxes
   const colIndexes = fullHeader.map((label, i) => {
     if (i === 0 || visibleCheckboxes.includes(label)) return i;
     return -1;
   }).filter(i => i !== -1);
 
+  // ✅ Filter rows by selected date range
   const filteredRows = transformedData.slice(1).filter(row => {
     const date = new Date(row[dateIndex]);
     return date >= startDate && date <= endDate;
   });
 
-  // Grouping logic
+  // ✅ Aggregate logic for monthly/yearly
   let groupedRows;
   if (mode === 'monthly' || mode === 'yearly') {
     const grouped = {};
 
     filteredRows.forEach(row => {
       const date = new Date(row[0]);
-      let key = mode === 'monthly'
+      const key = mode === 'monthly'
         ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
         : `${date.getFullYear()}`;
 
       if (!grouped[key]) {
-        grouped[key] = { count: 0, sum: Array(row.length).fill(0) };
+        grouped[key] = {
+          count: 0,
+          sum: Array(row.length).fill(0),
+          label: new Date(date.getFullYear(), mode === 'monthly' ? date.getMonth() : 0, 1)
+        };
       }
 
       for (let i = 1; i < row.length; i++) {
-        grouped[key].sum[i] += row[i];
+        grouped[key].sum[i] += parseFloat(row[i]) || 0;
       }
 
-      grouped[key].sum[0] = date;
       grouped[key].count++;
     });
 
+    // ✅ Compute averages
     groupedRows = Object.values(grouped).map(group => {
       const avg = [...group.sum];
       for (let i = 1; i < avg.length; i++) {
-        avg[i] = group.count ? avg[i] / group.count : 0;
+        avg[i] = group.count ? avg[i] / group.count : null;
       }
+      avg[0] = group.label;
       return avg;
     });
   } else {
     groupedRows = filteredRows;
   }
 
-  // Build table
+  // ✅ Build the table
   const table = document.createElement("table");
   const thead = document.createElement("thead");
   const tbody = document.createElement("tbody");
@@ -619,8 +622,9 @@ function renderForwardCurveTable(startDateInput, endDateInput, mode = 'daily') {
 
   groupedRows.forEach(row => {
     const tr = document.createElement("tr");
-    colIndexes.forEach((i, idx) => {
+    colIndexes.forEach(i => {
       const td = document.createElement("td");
+
       if (i === 0) {
         const date = new Date(row[i]);
         td.textContent = mode === 'yearly'
@@ -629,9 +633,10 @@ function renderForwardCurveTable(startDateInput, endDateInput, mode = 'daily') {
             ? date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
             : date.toLocaleDateString();
       } else {
-        // ✅ Fix: do not multiply by 100 — values already in percentage units
-        td.textContent = `${parseFloat(row[i]).toFixed(2)}%`;
+        const val = parseFloat(row[i]);
+        td.textContent = isNaN(val) ? '-' : `${val.toFixed(2)}%`;
       }
+
       tr.appendChild(td);
     });
     tbody.appendChild(tr);
