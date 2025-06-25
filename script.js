@@ -178,21 +178,21 @@ function drawChart(startDate = new Date(2019, 0, 1), endDate = new Date(2025, 11
     return;
   }
 
-  // ✅ Store the active range globally so the table uses the same
+  // Store the active range globally so the table uses the same
   window.currentStartDate = startDate;
   window.currentEndDate = endDate;
 
-  console.log("📊 Drawing chart with range:", startDate, "to", endDate);
+  console.log("Drawing chart with range:", startDate, "to", endDate);
 
   const fullHeader = transformedData[0];
 
-  // ✅ Filter columns based on visibleCheckboxes
+  // Filter columns based on visibleCheckboxes
   const filteredIndexes = fullHeader
     .map((label, i) => (i === 0 || visibleCheckboxes.includes(label)) ? i : -1)
     .filter(i => i !== -1);
 
   if (filteredIndexes.length <= 1) {
-    console.warn("⚠️ Please select at least one data series to render the chart.");
+    console.warn("Please select at least one data series to render the chart.");
     const chartDiv = document.getElementById("chart_div");
     if (chartDiv) {
       chartDiv.innerHTML = "<p style='color:red;'>Please select at least one data series to display the chart.</p>";
@@ -200,10 +200,10 @@ function drawChart(startDate = new Date(2019, 0, 1), endDate = new Date(2025, 11
     return;
   }
 
-  // ✅ Build data array with only selected columns
+  //Build data array with only selected columns
   let dataArray = transformedData.map(row => filteredIndexes.map(i => row[i]));
 
-  // ✅ Smoothing toggle
+  //Smoothing toggle
   const smoothingToggle = document.getElementById("smoothingToggle");
   if (smoothingToggle?.checked) {
     dataArray = smoothData(dataArray, 5);
@@ -571,7 +571,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 function renderForwardCurveTable(startDateInput, endDateInput, mode = 'daily') {
   if (!transformedData || transformedData.length < 2) {
-    console.warn("⚠️ No transformed data available.");
+    console.warn("No transformed data available.");
     return;
   }
 
@@ -587,8 +587,8 @@ function renderForwardCurveTable(startDateInput, endDateInput, mode = 'daily') {
   const startDate = window.currentStartDate || new Date(2019, 0, 1);
   const endDate = window.currentEndDate || new Date(2025, 11, 31);
 
-  console.log("📅 Table Start Date:", startDate.toISOString());
-  console.log("📅 Table End Date:", endDate.toISOString());
+  console.log("Table Start Date:", startDate.toISOString());
+  console.log("Table End Date:", endDate.toISOString());
 
   const fullHeader = transformedData[0];
   const dateIndex = 0;
@@ -599,8 +599,8 @@ function renderForwardCurveTable(startDateInput, endDateInput, mode = 'daily') {
     return -1;
   }).filter(i => i !== -1);
 
-  console.log("🧩 Visible Columns (indexes):", colIndexes);
-  console.log("👁️ Visible Column Labels:", visibleCheckboxes);
+  console.log("Visible Columns (indexes):", colIndexes);
+  console.log("Visible Column Labels:", visibleCheckboxes);
 
   // Filter rows within selected date range
   const filteredRows = transformedData.slice(1).filter(row => {
@@ -610,9 +610,9 @@ function renderForwardCurveTable(startDateInput, endDateInput, mode = 'daily') {
     return rowDate >= start && rowDate <= end;
   });
 
-  console.log("📊 Filtered rows within date range:", filteredRows.length);
+  console.log("Filtered rows within date range:", filteredRows.length);
   if (filteredRows.length === 0) {
-    console.warn("⚠️ No rows matched the date range.");
+    console.warn("No rows matched the date range.");
   }
 
   // Handle grouping for monthly or yearly modes
@@ -646,10 +646,10 @@ function renderForwardCurveTable(startDateInput, endDateInput, mode = 'daily') {
       return avg;
     });
 
-    console.log(`📅 Grouped (${mode}) row count:`, groupedRows.length);
+    console.log(`Grouped (${mode}) row count:`, groupedRows.length);
   } else {
     groupedRows = filteredRows;
-    console.log("📅 Daily (raw) row count:", groupedRows.length);
+    console.log("Daily (raw) row count:", groupedRows.length);
   }
 
   // Table rendering
@@ -689,7 +689,7 @@ function renderForwardCurveTable(startDateInput, endDateInput, mode = 'daily') {
   container.innerHTML = "";
   container.appendChild(table);
 
-  console.log("✅ Table rendering complete.");
+  console.log("Table rendering complete.");
 }
 
 document.querySelectorAll(".term-btn").forEach((btn) => {
