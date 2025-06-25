@@ -178,7 +178,97 @@ function drawChart(startDate = new Date(2019, 0, 1), endDate = new Date(2025, 11
     return;
   }
 
-  console.log("Drawing chart with range:", startDate, "to", endDate);
+  console.log("🎯 Drawing chart with range:", startDate, "to", endDate);
+
+  let dataArray = transformedData;
+
+  const smoothingToggle = document.getElementById("smoothingToggle");
+  if (smoothingToggle?.checked) {
+    dataArray = smoothData(dataArray, 5);
+  }
+
+  try {
+    const data = google.visualization.arrayToDataTable(dataArray);
+    const header = dataArray[0];
+
+    const asOfDate = getDateFromInputs("asOf") || new Date();
+    const highlightActuals = document.getElementById("actualsToggle")?.checked ?? false;
+    const showHistorical = document.getElementById("historicalToggle")?.checked ?? false;
+
+    const options = {
+      title: '',
+      height: 500,
+      curveType: 'function',
+      legend: { position: 'bottom' },
+      chartArea: { width: '85%', height: '70%' },
+      lineWidth: 2,
+      hAxis: {
+        title: 'Reset Date',
+        format: 'yyyy',
+        slantedText: false,
+        ticks: generateYearlyTicks(startDate, endDate),
+        textStyle: { fontSize: 12 },
+        gridlines: { color: 'transparent' },  // Remove vertical lines
+      },
+      vAxis: {
+        format: '#.##%',
+        textStyle: { fontSize: 12 },
+        gridlines: { color: '#e0e0e0' },
+        baselineColor: '#333',
+        baseline: 0,
+        textPosition: 'out',
+        minorGridlines: { color: 'transparent' },
+      },
+      series: {}
+    };
+
+    const colorMap = {
+      "1M Term SOFR": "#1976d2",              // Blue
+      "3M Term SOFR": "#388e3c",              // Green
+      "30D Average SOFR (NYFED)": "#f57c00"   // Orange
+    };
+
+    for (let i = 1; i < header.length; i++) {
+      const label = header[i];
+      const color = colorMap[label] || "#9e9e9e"; // fallback
+
+      const seriesOptions = {
+        color: highlightActuals && label.includes("Actual") ? "#d32f2f" : color
+      };
+
+      // Show dashed line if historical toggle is on
+      if (showHistorical) {
+        const hasHistorical = dataArray.some(row => row[0] instanceof Date && row[0] < asOfDate);
+        if (hasHistorical) {
+          seriesOptions.lineDashStyle = [4, 4];
+        }
+      }
+
+      options.series[i - 1] = seriesOptions;
+    }
+
+    const chart = new google.visualization.LineChart(document.getElementById("chart_div"));
+    chart.draw(data, options);
+
+    // ✅ Render the table with same date range & view mode
+    renderForwardCurveTable(startDate, endDate, viewMode);
+
+  } catch (err) {
+    console.error("Chart rendering error:", err);
+  }
+}
+
+function drawChart(startDate = new Date(2019, 0, 1), endDate = new Date(2025, 11, 31)) {
+  if (!transformedData || transformedData.length < 2) {
+    console.warn("Not enough data to draw the chart.");
+    return;
+  }
+
+  // ✅ Store the active range globally so the table uses the same
+  window.currentStartDate = startDate;
+  window.currentEndDate = endDate;
+
+  console.log("📊 Drawing chart with range:", startDate, "to", endDate);
 
   let dataArray = transformedData;
 
@@ -544,36 +634,53 @@ document.addEventListener("DOMContentLoaded", () => {
   drawChart(currentStartDate, currentEndDate);
 });
 
-// ...existing code...
-
 function renderForwardCurveTable(startDateInput, endDateInput, mode = 'daily') {
   if (!transformedData || transformedData.length < 2) {
-    console.warn("No transformed data available.");
+    console.warn("⚠️ No transformed data available.");
     return;
   }
 
   const container = document.getElementById("forwardCurveTableContainer");
   if (!container) return;
 
-  // Always use the passed-in dates, or default to 2019-2025 for testing
-  let startDate = startDateInput ? new Date(startDateInput) : new Date(2019, 0, 1);
-  let endDate = endDateInput ? new Date(endDateInput) : new Date(2025, 11, 31);
+  // Parse dates safely
+  const parseDate = val => {
+    const d = new Date(val);
+    return isNaN(d.getTime()) ? null : d;
+  };
+
+  const startDate = window.currentStartDate || new Date(2019, 0, 1);
+  const endDate = window.currentEndDate || new Date(2025, 11, 31);
+
+  console.log("📅 Table Start Date:", startDate.toISOString());
+  console.log("📅 Table End Date:", endDate.toISOString());
 
   const fullHeader = transformedData[0];
   const dateIndex = 0;
 
+  // Determine which columns to include
   const colIndexes = fullHeader.map((label, i) => {
     if (i === 0 || visibleCheckboxes.includes(label)) return i;
     return -1;
   }).filter(i => i !== -1);
 
+  console.log("🧩 Visible Columns (indexes):", colIndexes);
+  console.log("👁️ Visible Column Labels:", visibleCheckboxes);
+
+  // Filter rows within selected date range
   const filteredRows = transformedData.slice(1).filter(row => {
-    const date = new Date(row[dateIndex]);
-    const hasAnyValue = colIndexes.slice(1).some(i => row[i] !== undefined && row[i] !== null && row[i] !== '');
-    return date >= startDate && date <= endDate && hasAnyValue;
+    const rowDate = new Date(row[dateIndex]).setHours(0, 0, 0, 0);
+    const start = new Date(startDate).setHours(0, 0, 0, 0);
+    const end = new Date(endDate).setHours(0, 0, 0, 0);
+    return rowDate >= start && rowDate <= end;
   });
 
-  // Grouping logic
+  console.log("📊 Filtered rows within date range:", filteredRows.length);
+  if (filteredRows.length === 0) {
+    console.warn("⚠️ No rows matched the date range.");
+  }
+
+  // Handle grouping for monthly or yearly modes
   let groupedRows;
   if (mode === 'monthly' || mode === 'yearly') {
     const grouped = {};
@@ -585,15 +692,13 @@ function renderForwardCurveTable(startDateInput, endDateInput, mode = 'daily') {
         : `${date.getFullYear()}`;
 
       if (!grouped[key]) {
-        grouped[key] = { count: 0, sum: Array(row.length).fill(0) };
-        grouped[key].lastDate = date;
+        grouped[key] = { count: 0, sum: Array(row.length).fill(0), sampleDate: date };
       }
 
       for (let i = 1; i < row.length; i++) {
-        grouped[key].sum[i] += parseFloat(row[i]) || 0;
+        grouped[key].sum[i] += row[i];
       }
 
-      grouped[key].sum[0] = grouped[key].lastDate;
       grouped[key].count++;
     });
 
@@ -602,13 +707,17 @@ function renderForwardCurveTable(startDateInput, endDateInput, mode = 'daily') {
       for (let i = 1; i < avg.length; i++) {
         avg[i] = group.count ? avg[i] / group.count : 0;
       }
+      avg[0] = group.sampleDate;
       return avg;
     });
+
+    console.log(`📅 Grouped (${mode}) row count:`, groupedRows.length);
   } else {
     groupedRows = filteredRows;
+    console.log("📅 Daily (raw) row count:", groupedRows.length);
   }
 
-  // Build table
+  // Table rendering
   const table = document.createElement("table");
   const thead = document.createElement("thead");
   const tbody = document.createElement("tbody");
@@ -633,7 +742,7 @@ function renderForwardCurveTable(startDateInput, endDateInput, mode = 'daily') {
             ? date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
             : date.toLocaleDateString();
       } else {
-        td.textContent = row[i] !== undefined && row[i] !== null ? `${parseFloat(row[i]).toFixed(2)}%` : '';
+        td.textContent = `${parseFloat(row[i]).toFixed(2)}%`;
       }
       tr.appendChild(td);
     });
@@ -644,6 +753,8 @@ function renderForwardCurveTable(startDateInput, endDateInput, mode = 'daily') {
   table.appendChild(tbody);
   container.innerHTML = "";
   container.appendChild(table);
+
+  console.log("✅ Table rendering complete.");
 }
 
 document.querySelectorAll(".term-btn").forEach((btn) => {
