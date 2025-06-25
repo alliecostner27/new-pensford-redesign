@@ -190,8 +190,10 @@ function drawChart(startDate = new Date(2019, 0, 1), endDate = new Date(2025, 11
   try {
     const data = google.visualization.arrayToDataTable(dataArray);
     const header = dataArray[0];
+
     const asOfDate = getDateFromInputs("asOf") || new Date();
     const highlightActuals = document.getElementById("actualsToggle")?.checked ?? false;
+    const showHistorical = document.getElementById("historicalToggle")?.checked ?? false;
 
     const options = {
       title: '',
@@ -223,13 +225,20 @@ function drawChart(startDate = new Date(2019, 0, 1), endDate = new Date(2025, 11
 
     for (let i = 1; i < header.length; i++) {
       const label = header[i];
-      const color = colorMap[label] || "#9e9e9e"; // Default gray if unknown
-      const isHistorical = dataArray.some(row => row[0] instanceof Date && row[0] < asOfDate);
+      const color = colorMap[label] || "#9e9e9e"; // Fallback to gray
 
-      options.series[i - 1] = {
-        color: highlightActuals && label.includes("Actual") ? '#d32f2f' : color,
-        lineDashStyle: isHistorical ? [4, 4] : null
+      const seriesOptions = {
+        color: highlightActuals && label.includes("Actual") ? "#d32f2f" : color
       };
+
+      if (showHistorical) {
+        const hasHistorical = dataArray.some(row => row[0] instanceof Date && row[0] < asOfDate);
+        if (hasHistorical) {
+          seriesOptions.lineDashStyle = [4, 4]; // Dashed line for historical
+        }
+      }
+
+      options.series[i - 1] = seriesOptions;
     }
 
     const chart = new google.visualization.LineChart(document.getElementById("chart_div"));
