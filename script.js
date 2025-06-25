@@ -173,18 +173,37 @@ function generateYearTicks(startDate, endDate) {
 }
 
 function drawChart(startDate = new Date(2019, 0, 1), endDate = new Date(2025, 11, 31)) {
-  window.currentStartDate = startDate;
-  window.currentEndDate = endDate;
-  
   if (!transformedData || transformedData.length < 2) {
     console.warn("Not enough data to draw the chart.");
     return;
   }
 
-  console.log("🎯 Drawing chart with range:", startDate, "to", endDate);
+  // ✅ Store the active range globally so the table uses the same
+  window.currentStartDate = startDate;
+  window.currentEndDate = endDate;
 
-  let dataArray = transformedData;
+  console.log("📊 Drawing chart with range:", startDate, "to", endDate);
 
+  const fullHeader = transformedData[0];
+
+  // ✅ Filter columns based on visibleCheckboxes
+  const filteredIndexes = fullHeader
+    .map((label, i) => (i === 0 || visibleCheckboxes.includes(label)) ? i : -1)
+    .filter(i => i !== -1);
+
+  if (filteredIndexes.length <= 1) {
+    console.warn("⚠️ Please select at least one data series to render the chart.");
+    const chartDiv = document.getElementById("chart_div");
+    if (chartDiv) {
+      chartDiv.innerHTML = "<p style='color:red;'>Please select at least one data series to display the chart.</p>";
+    }
+    return;
+  }
+
+  // ✅ Build data array with only selected columns
+  let dataArray = transformedData.map(row => filteredIndexes.map(i => row[i]));
+
+  // ✅ Smoothing toggle
   const smoothingToggle = document.getElementById("smoothingToggle");
   if (smoothingToggle?.checked) {
     dataArray = smoothData(dataArray, 5);
@@ -211,7 +230,7 @@ function drawChart(startDate = new Date(2019, 0, 1), endDate = new Date(2025, 11
         slantedText: false,
         ticks: generateYearlyTicks(startDate, endDate),
         textStyle: { fontSize: 12 },
-        gridlines: { color: 'transparent' },  // Remove vertical lines
+        gridlines: { color: 'transparent' }
       },
       vAxis: {
         format: '#.##%',
@@ -220,7 +239,7 @@ function drawChart(startDate = new Date(2019, 0, 1), endDate = new Date(2025, 11
         baselineColor: '#333',
         baseline: 0,
         textPosition: 'out',
-        minorGridlines: { color: 'transparent' },
+        minorGridlines: { color: 'transparent' }
       },
       series: {}
     };
@@ -233,13 +252,12 @@ function drawChart(startDate = new Date(2019, 0, 1), endDate = new Date(2025, 11
 
     for (let i = 1; i < header.length; i++) {
       const label = header[i];
-      const color = colorMap[label] || "#9e9e9e"; // fallback
+      const color = colorMap[label] || "#9e9e9e"; // fallback gray
 
       const seriesOptions = {
         color: highlightActuals && label.includes("Actual") ? "#d32f2f" : color
       };
 
-      // Show dashed line if historical toggle is on
       if (showHistorical) {
         const hasHistorical = dataArray.some(row => row[0] instanceof Date && row[0] < asOfDate);
         if (hasHistorical) {
@@ -253,99 +271,13 @@ function drawChart(startDate = new Date(2019, 0, 1), endDate = new Date(2025, 11
     const chart = new google.visualization.LineChart(document.getElementById("chart_div"));
     chart.draw(data, options);
 
-    //Render the table with same date range & view mode
+    // ✅ Update the table to match current view
     renderForwardCurveTable(startDate, endDate, viewMode);
 
   } catch (err) {
     console.error("Chart rendering error:", err);
   }
 }
-
-function drawChart(startDate = new Date(2019, 0, 1), endDate = new Date(2025, 11, 31)) {
-  if (!transformedData || transformedData.length < 2) {
-    console.warn("Not enough data to draw the chart.");
-    return;
-  }
-
-  // ✅ Store the active range globally so the table uses the same
-  window.currentStartDate = startDate;
-  window.currentEndDate = endDate;
-
-  console.log("📊 Drawing chart with range:", startDate, "to", endDate);
-
-  let dataArray = transformedData;
-
-  const smoothingToggle = document.getElementById("smoothingToggle");
-  if (smoothingToggle?.checked) {
-    dataArray = smoothData(dataArray, 5);
-  }
-
-  try {
-    const data = google.visualization.arrayToDataTable(dataArray);
-    const header = dataArray[0];
-
-    const asOfDate = getDateFromInputs("asOf") || new Date();
-    const highlightActuals = document.getElementById("actualsToggle")?.checked ?? false;
-    const showHistorical = document.getElementById("historicalToggle")?.checked ?? false;
-
-    const options = {
-      title: '',
-      height: 500,
-      curveType: 'function',
-      legend: { position: 'bottom' },
-      chartArea: { width: '85%', height: '70%' },
-      lineWidth: 2,
-      hAxis: {
-        title: 'Reset Date',
-        format: 'yyyy',
-        slantedText: false,
-        ticks: generateYearlyTicks(startDate, endDate),
-        textStyle: { fontSize: 12 },
-        gridlines: {color: 'transparent'},
-      },
-      vAxis: {
-        format: '#.##%',
-        textStyle: { fontSize: 12 },
-        gridlines: {color: '#e0e0e0'},
-        baselineColor: '#333',
-        baseline: 0,
-        textPosition: 'out',
-        minorGridlines: { color: 'transparent' },
-      },
-      series: {}
-    };
-
-    const colorMap = {
-      "1M Term SOFR": "#1976d2",              // Blue
-      "3M Term SOFR": "#388e3c",              // Green
-      "30D Average SOFR (NYFED)": "#f57c00"   // Orange
-    };
-
-    for (let i = 1; i < header.length; i++) {
-      const label = header[i];
-      const color = colorMap[label] || "#9e9e9e"; // Fallback to gray
-
-      const seriesOptions = {
-        color: highlightActuals && label.includes("Actual") ? "#d32f2f" : color
-      };
-
-      if (showHistorical) {
-        const hasHistorical = dataArray.some(row => row[0] instanceof Date && row[0] < asOfDate);
-        if (hasHistorical) {
-          seriesOptions.lineDashStyle = [4, 4]; // Dashed line for historical
-        }
-      }
-
-      options.series[i - 1] = seriesOptions;
-    }
-
-    const chart = new google.visualization.LineChart(document.getElementById("chart_div"));
-    chart.draw(data, options);
-  } catch (err) {
-    console.error("Chart rendering error:", err);
-  }
-}
-
 
 // Trigger chart redraw when toggles or date dropdowns are changed
 function setupForwardCurveInteractionListeners() {
@@ -927,3 +859,13 @@ function getDateFromInputs(prefix) {
   return new Date(parsedYear, monthIndex, parsedDay);
 }
 
+document.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+  cb.addEventListener("change", () => {
+    visibleCheckboxes = Array.from(document.querySelectorAll('input[type="checkbox"]:checked'))
+      .map(cb => cb.value)
+      .filter(v => v !== "Date" && v !== "Reset Date");
+
+    visibleCheckboxes.unshift("Reset Date");
+    processDataAndRedraw();
+  });
+});
