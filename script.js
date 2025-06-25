@@ -182,7 +182,6 @@ function drawChart(startDate = new Date(2019, 0, 1), endDate = new Date(2025, 11
 
   let dataArray = transformedData;
 
-  // Optional smoothing
   const smoothingToggle = document.getElementById("smoothingToggle");
   if (smoothingToggle?.checked) {
     dataArray = smoothData(dataArray, 5);
@@ -190,10 +189,9 @@ function drawChart(startDate = new Date(2019, 0, 1), endDate = new Date(2025, 11
 
   try {
     const data = google.visualization.arrayToDataTable(dataArray);
-
+    const header = dataArray[0];
     const asOfDate = getDateFromInputs("asOf") || new Date();
-    const actualsToggle = document.getElementById("actualsToggle");
-    const highlightActuals = actualsToggle?.checked ?? false;
+    const highlightActuals = document.getElementById("actualsToggle")?.checked ?? false;
 
     const options = {
       title: '',
@@ -217,13 +215,19 @@ function drawChart(startDate = new Date(2019, 0, 1), endDate = new Date(2025, 11
       series: {}
     };
 
-    // Apply line style and coloring
-    const header = dataArray[0];
+    const colorMap = {
+      "1M Term SOFR": "#1976d2",              // Blue
+      "3M Term SOFR": "#388e3c",              // Green
+      "30D Average SOFR (NYFED)": "#f57c00"   // Orange
+    };
+
     for (let i = 1; i < header.length; i++) {
       const label = header[i];
+      const color = colorMap[label] || "#9e9e9e"; // Default gray if unknown
       const isHistorical = dataArray.some(row => row[0] instanceof Date && row[0] < asOfDate);
+
       options.series[i - 1] = {
-        color: highlightActuals && label.includes("Actual") ? '#d32f2f' : '#1976d2',
+        color: highlightActuals && label.includes("Actual") ? '#d32f2f' : color,
         lineDashStyle: isHistorical ? [4, 4] : null
       };
     }
@@ -231,9 +235,10 @@ function drawChart(startDate = new Date(2019, 0, 1), endDate = new Date(2025, 11
     const chart = new google.visualization.LineChart(document.getElementById("chart_div"));
     chart.draw(data, options);
   } catch (err) {
-    console.error("Chart rendering error:", err);
+    console.error("❌ Chart rendering error:", err);
   }
 }
+
 
 // Trigger chart redraw when toggles or date dropdowns are changed
 function setupForwardCurveInteractionListeners() {
