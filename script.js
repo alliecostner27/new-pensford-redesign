@@ -173,6 +173,9 @@ function generateYearTicks(startDate, endDate) {
 }
 
 function drawChart(startDate = new Date(2019, 0, 1), endDate = new Date(2025, 11, 31)) {
+  window.currentStartDate = startDate;
+  window.currentEndDate = endDate;
+  
   if (!transformedData || transformedData.length < 2) {
     console.warn("Not enough data to draw the chart.");
     return;
@@ -250,7 +253,7 @@ function drawChart(startDate = new Date(2019, 0, 1), endDate = new Date(2025, 11
     const chart = new google.visualization.LineChart(document.getElementById("chart_div"));
     chart.draw(data, options);
 
-    // ✅ Render the table with same date range & view mode
+    //Render the table with same date range & view mode
     renderForwardCurveTable(startDate, endDate, viewMode);
 
   } catch (err) {
