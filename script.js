@@ -544,7 +544,9 @@ document.addEventListener("DOMContentLoaded", () => {
   drawChart(currentStartDate, currentEndDate);
 });
 
-function renderForwardCurveTable(startDate, endDate, mode = 'daily') {
+// ...existing code...
+
+function renderForwardCurveTable(startDateInput, endDateInput, mode = 'daily') {
   if (!transformedData || transformedData.length < 2) {
     console.warn("No transformed data available.");
     return;
@@ -553,22 +555,25 @@ function renderForwardCurveTable(startDate, endDate, mode = 'daily') {
   const container = document.getElementById("forwardCurveTableContainer");
   if (!container) return;
 
+  // Always use the passed-in dates, or default to 2019-2025 for testing
+  let startDate = startDateInput ? new Date(startDateInput) : new Date(2019, 0, 1);
+  let endDate = endDateInput ? new Date(endDateInput) : new Date(2025, 11, 31);
+
   const fullHeader = transformedData[0];
   const dateIndex = 0;
 
-  // ✅ Columns to display: Reset Date + selected checkboxes
   const colIndexes = fullHeader.map((label, i) => {
     if (i === 0 || visibleCheckboxes.includes(label)) return i;
     return -1;
   }).filter(i => i !== -1);
 
-  // ✅ Filter rows by selected date range
   const filteredRows = transformedData.slice(1).filter(row => {
     const date = new Date(row[dateIndex]);
-    return date >= startDate && date <= endDate;
+    const hasAnyValue = colIndexes.slice(1).some(i => row[i] !== undefined && row[i] !== null && row[i] !== '');
+    return date >= startDate && date <= endDate && hasAnyValue;
   });
 
-  // ✅ Aggregate logic for monthly/yearly
+  // Grouping logic
   let groupedRows;
   if (mode === 'monthly' || mode === 'yearly') {
     const grouped = {};
@@ -580,34 +585,30 @@ function renderForwardCurveTable(startDate, endDate, mode = 'daily') {
         : `${date.getFullYear()}`;
 
       if (!grouped[key]) {
-        grouped[key] = {
-          count: 0,
-          sum: Array(row.length).fill(0),
-          label: new Date(date.getFullYear(), mode === 'monthly' ? date.getMonth() : 0, 1)
-        };
+        grouped[key] = { count: 0, sum: Array(row.length).fill(0) };
+        grouped[key].lastDate = date;
       }
 
       for (let i = 1; i < row.length; i++) {
         grouped[key].sum[i] += parseFloat(row[i]) || 0;
       }
 
+      grouped[key].sum[0] = grouped[key].lastDate;
       grouped[key].count++;
     });
 
-    // ✅ Compute averages
     groupedRows = Object.values(grouped).map(group => {
       const avg = [...group.sum];
       for (let i = 1; i < avg.length; i++) {
-        avg[i] = group.count ? avg[i] / group.count : null;
+        avg[i] = group.count ? avg[i] / group.count : 0;
       }
-      avg[0] = group.label;
       return avg;
     });
   } else {
     groupedRows = filteredRows;
   }
 
-  // ✅ Build the table
+  // Build table
   const table = document.createElement("table");
   const thead = document.createElement("thead");
   const tbody = document.createElement("tbody");
@@ -624,7 +625,6 @@ function renderForwardCurveTable(startDate, endDate, mode = 'daily') {
     const tr = document.createElement("tr");
     colIndexes.forEach(i => {
       const td = document.createElement("td");
-
       if (i === 0) {
         const date = new Date(row[i]);
         td.textContent = mode === 'yearly'
@@ -633,10 +633,8 @@ function renderForwardCurveTable(startDate, endDate, mode = 'daily') {
             ? date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
             : date.toLocaleDateString();
       } else {
-        const val = parseFloat(row[i]);
-        td.textContent = isNaN(val) ? '-' : `${val.toFixed(2)}%`;
+        td.textContent = row[i] !== undefined && row[i] !== null ? `${parseFloat(row[i]).toFixed(2)}%` : '';
       }
-
       tr.appendChild(td);
     });
     tbody.appendChild(tr);
