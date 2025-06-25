@@ -4,7 +4,7 @@ google.charts.load("current", {
 google.charts.setOnLoadCallback(loadData);
 let fullData = [], headers = [], transformedData = [];
 let activeRange = "3y";
-let visibleCheckboxes = ["Date"];
+let visibleCheckboxes = ["Reset Date", "1M Term SOFR", "3M Term SOFR", "30D Average SOFR (NYFED)"];
 let viewMode = "daily";
 let tableViewMode = "daily";
 let dataCache = { key: null, grouped: null, averaged: null };
@@ -19,109 +19,125 @@ function debounceRedraw() {
 
 let cachedParams = {};
 let cachedGroupedData = [];
+function transformData(rawData) {
+  if (!rawData || rawData.length < 2) {
+    console.warn("❌ No raw data available for transformation.");
+    return [];
+  }
+
+  const header = rawData[0];
+  const resetDateIndex = header.indexOf("Reset Date");
+
+  if (resetDateIndex === -1) {
+    console.error("❌ 'Reset Date' column missing.");
+    return [];
+  }
+
+  const cleaned = [header];
+
+  for (let i = 1; i < rawData.length; i++) {
+    const row = rawData[i];
+    const newRow = [];
+
+    for (let j = 0; j < row.length; j++) {
+      if (j === resetDateIndex) {
+        const date = new Date(row[j]);
+        if (isNaN(date.getTime())) break;
+        newRow.push(date);
+      } else {
+        const val = parseFloat(row[j]);
+        newRow.push(isNaN(val) ? null : val);
+      }
+    }
+
+    if (newRow.length === header.length) {
+      cleaned.push(newRow);
+    }
+  }
+
+  return cleaned;
+}
 
 function processDataAndRedraw() {
   if (!fullData || fullData.length < 2) {
-    console.error("No data to process");
+    console.error("❌ No full data to process.");
     return;
   }
 
-  const headerRow = fullData[0];
-  const dataRows = fullData.slice(1);
-  const dateIndex = headerRow.findIndex(h => h.toLowerCase().includes("date"));
+  const dateIndex = headers.indexOf("Reset Date");
   if (dateIndex === -1) {
-    console.error("No date column found in headers.");
+    console.error("❌ 'Reset Date' column not found.");
     return;
   }
 
-  // Build start and end dates based on since date and term range
-  const sinceDay = document.getElementById("sinceDay")?.value;
-  const sinceMonth = document.getElementById("sinceMonth")?.value;
-  const sinceYear = document.getElementById("sinceYear")?.value;
-  let startDate;
+  // Extract valid dates
+  const allDates = fullData.slice(1)
+    .map(row => new Date(row[dateIndex]))
+    .filter(d => !isNaN(d));
 
-  if (sinceDay && sinceMonth && sinceYear) {
-    const combined = `${sinceMonth} ${sinceDay}, ${sinceYear}`;
-    const parsed = new Date(combined);
-    startDate = isNaN(parsed.getTime()) ? new Date(`${new Date().getFullYear()}-01-01`) : parsed;
-  } else {
-    startDate = new Date(`${new Date().getFullYear()}-01-01`);
+  if (!allDates.length) {
+    console.error("No valid dates found in dataset.");
+    return;
   }
 
-  let yearSpan = 10;
-  if (activeRange === "5y" || activeRange === "5Y") yearSpan = 5;
-  const endDate = new Date(startDate.getFullYear() + yearSpan, 11, 31);
+  // Determine fallback date range: 10 years from earliest date
+  const minDataDate = new Date(Math.min(...allDates));
+  const defaultStart = new Date(minDataDate.getFullYear(), 0, 1);
+  const defaultEnd = new Date(minDataDate.getFullYear() + 10, 11, 31);
 
-  // Parse, clean, and filter
-  const parsedRows = dataRows
-    .map(row => {
-      const rawDate = row[dateIndex];
-      const parsedDate = new Date(rawDate);
-      if (isNaN(parsedDate.getTime())) return null;
-      return { date: parsedDate, values: row };
-    })
-    .filter(obj => obj && obj.date >= startDate && obj.date <= endDate);
+  // Use input values if available
+  const inputStart = document.getElementById("startDateInput")?.value;
+  const inputEnd = document.getElementById("endDateInput")?.value;
 
-  // Grouping
-  const grouped = {};
-  parsedRows.forEach(({ date, values }) => {
-    const key = viewMode === "monthly"
-      ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-      : viewMode === "yearly"
-        ? `${date.getFullYear()}`
-        : date.toISOString().split("T")[0];
+  const startDate = inputStart ? new Date(inputStart) : defaultStart;
+  const endDate = inputEnd ? new Date(inputEnd) : defaultEnd;
 
-    if (!grouped[key]) {
-      grouped[key] = { count: 0, sums: Array(values.length).fill(0) };
-    }
+  console.log("📅 Using Start:", startDate, "End:", endDate);
 
-    grouped[key].count++;
-    values.forEach((val, i) => {
-      const num = parseFloat(val);
-      if (!isNaN(num)) {
-        grouped[key].sums[i] += num;
-      } else {
-        grouped[key].sums[i] = val;
-      }
-    });
+  // Filter rows within date range
+  const filteredRows = fullData.slice(1).filter(row => {
+    const d = new Date(row[dateIndex]);
+    return d >= startDate && d <= endDate;
   });
 
-  // Averaging
-  const averagedData = Object.entries(grouped).map(([label, obj]) => {
-    const avg = obj.sums.map((sum, i) => {
-      if (i === dateIndex) {
-        if (viewMode === "yearly") return new Date(Number(label), 0, 1);
-        if (viewMode === "monthly") {
-          const [y, m] = label.split("-");
-          return new Date(Number(y), Number(m) - 1, 1);
-        }
-        return new Date(label);
-      }
-      return typeof sum === "number" ? sum / obj.count : sum;
-    });
-    return avg;
-  });
+  console.log("✅ Parsed rows in date range:", filteredRows.length);
+  if (!filteredRows.length) {
+    console.warn("⚠️ No data rows passed the date range filter.");
+  }
 
-  transformedData = [headerRow, ...averagedData];
-  cachedGroupedData = averagedData;
-
-  drawChart(startDate, endDate);
-  renderForwardCurveTable(startDate, endDate, tableViewMode);
+  // Build transformedData to be used by drawChart
+  transformedData = [headers, ...filteredRows];
+  drawChart(); // Call chart rendering
 }
+
 function loadData() {
-  const url =  "https://script.google.com/macros/s/AKfycbzHFuyzb14srQh4moOB2fXzu_hFKA9QFaroaCgEdsS5b17ikQHqj-KvQ_EkTshqIUZvCg/exec?sheet=Floating"; // Replace with your URL
+  const url =
+    "https://script.google.com/macros/s/AKfycbzHFuyzb14srQh4moOB2fXzu_hFKA9QFaroaCgEdsS5b17ikQHqj-KvQ_EkTshqIUZvCg/exec?sheet=Floating";
 
   fetch(url)
-    .then(response => response.json())
-    .then(data => {
-      console.log("Fetched data:", data);
-      drawChart(data);
+    .then((response) => response.json())
+    .then((data) => {
+      console.log("✅ Raw fetched data:", data);
+      if (!data || data.length < 2) {
+        console.error("❌ Insufficient data from Apps Script");
+        return;
+      }
+
+      const transformed = transformData(data);
+
+      if (transformed.length < 2) {
+        console.error("❌ No valid rows after transformation.");
+        return;
+      }
+
+      fullData = transformed;
+      headers = transformed[0];
+      processDataAndRedraw();
     })
-    .catch(error => {
-      console.error("Fetch error:", error);
+    .catch((error) => {
+      console.error("❌ Fetch error:", error);
     });
 }
-
 
 // Helper to parse dropdown-based date selectors
 function parseSelectorDate(dayId, monthId, yearId) {
@@ -156,31 +172,68 @@ function generateYearTicks(startDate, endDate) {
   return ticks;
 }
 
-function drawChart(dataArray) {
-  const data = google.visualization.arrayToDataTable(dataArray);
-
-  const options = {
-  legend: { position: 'bottom' },
-  hAxis: {
-    title: 'Reset Date',
-    format: 'yyyy',
-    slantedText: false,
-    showTextEvery: 30,
-    gridlines: { count: 8 }
-  },
-  vAxis: {
-    format: '#.##%'  // displays as percentages
-  },
-  series: {
-    0: { color: '#d62728', lineWidth: 1.5 }
+function drawChart(startDate = new Date(2019, 0, 1), endDate = new Date(2025, 11, 31)) {
+  if (!transformedData || transformedData.length < 2) {
+    console.warn("Not enough data to draw the chart.");
+    return;
   }
-};
 
+  console.log("🎯 Drawing chart with range:", startDate, "to", endDate);
 
-  const chart = new google.visualization.LineChart(document.getElementById('chart_div'));
-  chart.draw(data, options);
+  let dataArray = transformedData;
+
+  // Optional smoothing
+  const smoothingToggle = document.getElementById("smoothingToggle");
+  if (smoothingToggle?.checked) {
+    dataArray = smoothData(dataArray, 5);
+  }
+
+  try {
+    const data = google.visualization.arrayToDataTable(dataArray);
+
+    const asOfDate = getDateFromInputs("asOf") || new Date();
+    const actualsToggle = document.getElementById("actualsToggle");
+    const highlightActuals = actualsToggle?.checked ?? false;
+
+    const options = {
+      title: '',
+      height: 500,
+      curveType: 'function',
+      legend: { position: 'bottom' },
+      chartArea: { width: '85%', height: '70%' },
+      lineWidth: 2,
+      hAxis: {
+        title: 'Reset Date',
+        format: 'yyyy',
+        slantedText: false,
+        ticks: generateYearlyTicks(startDate, endDate),
+        textStyle: { fontSize: 12 }
+      },
+      vAxis: {
+        title: '%',
+        format: '#.##%',
+        textStyle: { fontSize: 12 }
+      },
+      series: {}
+    };
+
+    // Apply line style and coloring
+    const header = dataArray[0];
+    for (let i = 1; i < header.length; i++) {
+      const label = header[i];
+      const isHistorical = dataArray.some(row => row[0] instanceof Date && row[0] < asOfDate);
+      options.series[i - 1] = {
+        color: highlightActuals && label.includes("Actual") ? '#d32f2f' : '#1976d2',
+        lineDashStyle: isHistorical ? [4, 4] : null
+      };
+    }
+
+    const chart = new google.visualization.LineChart(document.getElementById("chart_div"));
+    chart.draw(data, options);
+  } catch (err) {
+    console.error("Chart rendering error:", err);
+  }
 }
-
 
 // Trigger chart redraw when toggles or date dropdowns are changed
 function setupForwardCurveInteractionListeners() {
