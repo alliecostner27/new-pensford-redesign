@@ -229,26 +229,27 @@ h4 {
 
 .filter-tabs {
   display: flex;
-  border: 1px solid #eada85;
+  border: 1px solid #e6d981;
   border-radius: 8px;
   overflow: hidden;
-  margin-bottom: 1.25rem;
+  flex: 1;
+  min-width: 0;
 }
 
 .filter-tab {
-  flex: 1;
-  padding: 0.75rem 0;
-  background-color: #fff;
-  border: none;
+  background-color: white;
+  color: #666;
   font-weight: bold;
-  color: #7d7d7d;
-  cursor: pointer;
-  transition: background-color 0.3s ease;
+  border: none;
+  padding: 0.5rem;
+  font-size: 0.8rem;
+  flex: 1;
+  white-space: nowrap;
 }
 
 .filter-tab.active {
-  background-color: #eada85;
-  color: #172b42;
+  background-color: #e6d981;
+  color: #0c2340;
 }
 
 thead th:first-child,
@@ -304,19 +305,63 @@ thead th:first-child,
   gap: 0.5rem;
 }
 
-.term-btn {
-  padding: 0.4rem 0.75rem;
+/* === CHART / TABLE & TERM ROW === */
+.chart-table-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.tab-toggle-group {
+  display: flex;
+  border: 1px solid #e6d981;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.tab-term-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.tab-toggle {
+  background-color: #fff;
+  color: #666;
+  font-weight: bold;
   border: none;
-  background-color: white;
+  padding: 0.5rem 1.2rem;
   cursor: pointer;
-  color: #777;
+  font-size: 1rem;
+}
+
+.tab-toggle.active {
+  background-color: #e6d981;
+  color: #0c2340;
+}
+
+.term-options {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.term-btn {
+  background-color: white;
+  color: #444;
+  font-weight: bold;
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.5rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.2s ease;
 }
 
 .term-btn.active {
-  background-color: #eada85;
-  color: #172b42;
-  border-radius: 10px;
-  font-weight: bold;
+  background-color: #e6d981;
+  color: #0c2340;
 }
 
 .chart-content-block {

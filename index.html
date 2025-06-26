@@ -24,19 +24,18 @@
     <div class=dashboard-container>
       <div class=filter-column>
         <div class=filter-panel id=filterPanel style=display:block>
-          <div class="filter-tabs">
-            <button id="chartTab" class="filter-tab active" type="button">CHART</button>
-            <button id="tableTab" class="filter-tab" type="button">TABLE</button>
-          </div>
-          <hr>
-          <div class="filter-row term-toggle">
-            <label>Term</label>
-            <div class="term-options">
-              <button class="term-btn" data-term="5Y" type="button">5Y</button>
-              <button class="term-btn active" data-term="10Y" type="button">10Y</button>
-            </div>
-          </div>
-          <hr>
+          <div class="filter-row tab-term-row">
+  <div class="filter-tabs">
+    <button id="chartTab" class="filter-tab active" type="button">CHART</button>
+    <button id="tableTab" class="filter-tab" type="button">TABLE</button>
+  </div>
+  <div class="term-options">
+    <button class="term-btn" data-term="5Y" type="button">5Y</button>
+    <button class="term-btn active" data-term="10Y" type="button">10Y</button>
+  </div>
+</div>
+<hr>
+
           <div class="filter-row">
             <label for="historicalToggle">"Historical"</label>
             <label class="toggle-switch">
