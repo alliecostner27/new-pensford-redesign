@@ -124,6 +124,46 @@ h4 {
   font-weight: bold;
 }
 
+.filter-section-block {
+  background-color: #f9f9f9;
+  padding: 1rem;
+  border-radius: 10px;
+  margin-bottom: 1rem;
+}
+
+.filter-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.filter-section-title {
+  font-weight: bold;
+  color: #0c2340;
+  font-size: 1rem;
+}
+
+.filter-section-date {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.filter-section-date label {
+  font-size: 0.85rem;
+  color: #444;
+}
+
+.filter-section-date input[type="date"] {
+  padding: 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  width: 100%;
+}
+
+
 .filter-section h4 {
   font-size: 0.75rem;
   font-weight: 600;

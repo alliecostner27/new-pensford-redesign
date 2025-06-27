@@ -11,6 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap" rel=stylesheet>
   <script src=https://www.gstatic.com/charts/loader.js></script>
 </head>
+
 <body>
   <div class=main-wrapper>
     <header class=site-header>
@@ -25,51 +26,44 @@
       <div class=filter-column>
         <div class=filter-panel id=filterPanel style=display:block>
           <div class="filter-row tab-term-row">
-  <div class="filter-tabs">
-    <button id="chartTab" class="filter-tab active" type="button">CHART</button>
-    <button id="tableTab" class="filter-tab" type="button">TABLE</button>
-  </div>
-  <div class="term-options">
-    <button class="term-btn" data-term="5Y" type="button">5Y</button>
-    <button class="term-btn active" data-term="10Y" type="button">10Y</button>
-  </div>
-</div>
-<hr>
-
-          <div class="filter-row">
-            <label for="historicalToggle">"Historical"</label>
-            <label class="toggle-switch">
-              <input type="checkbox" id="historicalToggle" />
-              <span class="slider round"></span>
-            </label>
-          </div>
-          <hr>
-          <div class="filter-row">
-            <label for="actualsToggle">Since</label>
-            <div>
-              <select name="" id="sinceDay"></select>
-              <select name="" id="sinceMonth"></select>
-              <select name="" id="sinceYear"></select>
+            <div class="filter-tabs">
+              <button id="chartTab" class="filter-tab active" type="button">CHART</button>
+              <button id="tableTab" class="filter-tab" type="button">TABLE</button>
+            </div>
+            <div class="term-options">
+              <button class="term-btn" data-term="5Y" type="button">5Y</button>
+              <button class="term-btn active" data-term="10Y" type="button">10Y</button>
             </div>
           </div>
           <hr>
-          <div class="filter-row">
-            <label for="actualsToggle">Actuals</label>
-            <label class="toggle-switch">
-              <input type="checkbox" id="actualsToggle" />
-              <span class="slider round"></span>
-            </label>
-          </div>
-          <hr>
-           <div class="filter-row">
-            <label for="actualsToggle">As Of</label>
-            <div>
-              <select name="" id="asOfDay"></select>
-              <select name="" id="asOfMonth"></select>
-              <select name="" id="asOfYear"></select>
+          <div class="filter-section-block">
+            <div class="filter-section-header">
+              <span class="filter-section-title">Archival</span>
+              <label class="toggle-switch">
+                <input type="checkbox" id="archivalToggle" />
+                <span class="slider round"></span>
+                <span class="toggle-label">OFF</span>
+              </label>
+            </div>
+            <div class="filter-section-date">
+              <label for="asOfDay">As of</label>
+              <input type="date" id="asOfDate" />
             </div>
           </div>
-          <hr>
+          <div class="filter-section-block">
+            <div class="filter-section-header">
+              <span class="filter-section-title">Historical</span>
+              <label class="toggle-switch">
+                <input type="checkbox" id="historicalToggle" />
+                <span class="slider round"></span>
+                <span class="toggle-label">OFF</span>
+              </label>
+            </div>
+            <div class="filter-section-date">
+              <label for="sinceDay">Since</label>
+              <input type="date" id="sinceDate" />
+            </div>
+          </div>
           <div class=filter-section>
             <div class=accordion-header>Floating </div>
             <div class=accordion-content>
@@ -96,7 +90,7 @@
               <label><input type=checkbox value="3Y Treasury"> 3Y Treasury</label>
               <label><input type=checkbox value="5Y Treasury"> 5Y Treasury</label>
               <label><input type=checkbox value="7Y Treasury"> 7Y Treasury</label>
-              <label><input type=checkbox value="10Y Treasury" >10Y Treasury</label>
+              <label><input type=checkbox value="10Y Treasury">10Y Treasury</label>
               <label><input type=checkbox value="20Y Treasury"> 20Y Treasury</label>
               <label><input type=checkbox value="30Y Treasury"> 30 Treasury</label>
             </div>
@@ -123,114 +117,118 @@
       </div>
       <main class=dashboard-main-content>
         <div id="chartContent" class="tab-content">
-        <div class="chart-wrapper">
-          <div class="chart-actions">
-            <button onclick="downloadCSV()" class="xls-icon hide-on-mobile" type="button">
-              <img class="download-icon" src="images/download.png" alt="download icon"><span>Chart</span>
-            </button>
-            <button id="sharePageButton" type="button">
-              <img class="download-icon" src="images/send.png" alt="send icon"><span>Share</span>
-            </button>
-            <button id="adjustmentButton" type="button">
-              <img class="download-icon" src="images/adjustment.png" alt="adjustment icon">
-            </button>
+          <div class="chart-wrapper">
+            <div class="chart-actions">
+              <button onclick="downloadCSV()" class="xls-icon hide-on-mobile" type="button">
+                <img class="download-icon" src="images/download.png" alt="download icon"><span>Chart</span>
+              </button>
+              <button id="sharePageButton" type="button">
+                <img class="download-icon" src="images/send.png" alt="send icon"><span>Share</span>
+              </button>
+              <button id="adjustmentButton" type="button">
+                <img class="download-icon" src="images/adjustment.png" alt="adjustment icon">
+              </button>
+            </div>
+            <div id="chart_div" style="width:100%; height:500px;"></div>
           </div>
-          <div id="chart_div" style="width:100%; height:500px;"></div>
-        </div>
 
-        <div class="chart-content-block">
-          <div class="rates-commentary">
-            <h4 class="section-header">Rates & Commentary</h4>
-            <div class="rates-commentary-grid">
-              <div class="rates-left">
-                <div class="commentary-date-row">
-                  <select name="commentary-day-select" id="commentary-day-select">
-                    <option value="">16</option>
-                  </select>
-                  <select name="commentary-month-select" id="commentary-month-select">
-                    <option value="">June</option>
-                  </select>
-                  <select name="commentary-year-select" id="commentary-year-select">
-                    <option value="">2025</option>
-                  </select>
+          <div class="chart-content-block">
+            <div class="rates-commentary">
+              <h4 class="section-header">Rates & Commentary</h4>
+              <div class="rates-commentary-grid">
+                <div class="rates-left">
+                  <div class="commentary-date-row">
+                    <select name="commentary-day-select" id="commentary-day-select">
+                      <option value="">16</option>
+                    </select>
+                    <select name="commentary-month-select" id="commentary-month-select">
+                      <option value="">June</option>
+                    </select>
+                    <select name="commentary-year-select" id="commentary-year-select">
+                      <option value="">2025</option>
+                    </select>
+                  </div>
+                  <table class="rates-table">
+                    <thead>
+                      <tr>
+                        <th>Rates</th>
+                        <th>Open</th>
+                        <th>Close</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>2T</td>
+                        <td>0.595%</td>
+                        <td>0.587%</td>
+                      </tr>
+                      <tr>
+                        <td>10T</td>
+                        <td>1.357%</td>
+                        <td>1.435%</td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
-                <table class="rates-table">
-                  <thead>
-                    <tr>
-                      <th>Rates</th>
-                      <th>Open</th>
-                      <th>Close</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td>2T</td>
-                      <td>0.595%</td>
-                      <td>0.587%</td>
-                    </tr>
-                    <tr>
-                      <td>10T</td>
-                      <td>1.357%</td>
-                      <td>1.435%</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <div class="commentary-paragraphs">
-                <p>Long-term yields rose sharply todayfollowing Fed Chair Powell’s hawkish comments last Friday.</p>
-                <p>The increase in rates and decline in bond prices were driven by Treasury sell-offs and continued concerns about the Omicron variant.</p>
-                <p>No new economic data was released, but all eyes are on the upcoming CPI report due Friday.</p>
-              </div>
-            </div>
-          </div>
-          <div class="commentary-events-block">
-          <div class="grid-columns">
-            <div class="events-column">
-              <div class="events-box">
-                <h4 class="section-header">Upcoming</h4>
-                <div class="events-grid">
-                  <ul>
-                    <li><strong class="upcoming-date">May 23</strong><br>Jobless Claims<br>Building permits<br>Housing starts<br>Industrial production index</li>
-                    <li><strong class="upcoming-date">May 24</strong><br>No news</li>
-                    <li><strong class="upcoming-date">May 25</strong><br>NFIB small-business index, 10:00 AM<br>PPI inflation</li>
-                  </ul>
-                  <ul>
-                    <li><strong class="upcoming-date">May 26</strong><br>Retail sales<br>Import price index<br>ES Manufacturing index<br>Fed Reserve FOMC announcement<br>Powell press conference</li>
-                    <li><strong class="upcoming-date">May 27</strong><br>No news</li>
-                  </ul>
+                <div class="commentary-paragraphs">
+                  <p>Long-term yields rose sharply todayfollowing Fed Chair Powell’s hawkish comments last Friday.</p>
+                  <p>The increase in rates and decline in bond prices were driven by Treasury sell-offs and continued
+                    concerns about the Omicron variant.</p>
+                  <p>No new economic data was released, but all eyes are on the upcoming CPI report due Friday.</p>
                 </div>
               </div>
             </div>
-            <div class="podcast-column">
-            <div class="podcast-box">
-              <h4 class="section-header">THE RATE GUY PODCAST</h4>
-              <img src="images/podcast-logo.png" alt="Podcast Cover" class="podcast-cover" />
-              <p>A slightly irreverent take on interest rate markets and the economy.</p>
-              <a href="https://rateguy.libsyn.com/website" class="listen-btn">Listen Now</a>
+            <div class="commentary-events-block">
+              <div class="grid-columns">
+                <div class="events-column">
+                  <div class="events-box">
+                    <h4 class="section-header">Upcoming</h4>
+                    <div class="events-grid">
+                      <ul>
+                        <li><strong class="upcoming-date">May 23</strong><br>Jobless Claims<br>Building
+                          permits<br>Housing starts<br>Industrial production index</li>
+                        <li><strong class="upcoming-date">May 24</strong><br>No news</li>
+                        <li><strong class="upcoming-date">May 25</strong><br>NFIB small-business index, 10:00 AM<br>PPI
+                          inflation</li>
+                      </ul>
+                      <ul>
+                        <li><strong class="upcoming-date">May 26</strong><br>Retail sales<br>Import price index<br>ES
+                          Manufacturing index<br>Fed Reserve FOMC announcement<br>Powell press conference</li>
+                        <li><strong class="upcoming-date">May 27</strong><br>No news</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+                <div class="podcast-column">
+                  <div class="podcast-box">
+                    <h4 class="section-header">THE RATE GUY PODCAST</h4>
+                    <img src="images/podcast-logo.png" alt="Podcast Cover" class="podcast-cover" />
+                    <p>A slightly irreverent take on interest rate markets and the economy.</p>
+                    <a href="https://rateguy.libsyn.com/website" class="listen-btn">Listen Now</a>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-          </div>
         </div>
-        </div>
-      </div>
-      <div id="tableContent" class="tab-content" style="display: none;">
-         <div class="table-header-bar" style="display: flex; justify-content: space-between; align-items: center;">
-          <div class="table-left" style="flex: 1;">
-            <button class="view-btn" data-view="daily" type="button">Daily</button>
+        <div id="tableContent" class="tab-content" style="display: none;">
+          <div class="table-header-bar" style="display: flex; justify-content: space-between; align-items: center;">
+            <div class="table-left" style="flex: 1;">
+              <button class="view-btn" data-view="daily" type="button">Daily</button>
               <button class="view-btn" data-view="monthly" type="button">Monthly</button>
               <button class="view-btn" data-view="yearly" type="button">Yearly</button>
+            </div>
+            <div class="table-right" style="display: flex; align-items: left; gap: 1rem;">
+              <button onclick="downloadCSV()" class="xls-icon hide-on-mobile" type="button">
+                <img class="download-icon" src="images/download.png" alt="download icon" /><span>Excel</span>
+              </button>
+              <button id="sharePageButtonTable" type="button">
+                <img class="download-icon" src="images/send.png" alt="send icon" /><span>Share</span>
+              </button>
+            </div>
           </div>
-          <div class="table-right" style="display: flex; align-items: left; gap: 1rem;">
-            <button onclick="downloadCSV()" class="xls-icon hide-on-mobile" type="button">
-              <img class="download-icon" src="images/download.png" alt="download icon" /><span>Excel</span>
-            </button>
-            <button id="sharePageButtonTable" type="button">
-              <img class="download-icon" src="images/send.png" alt="send icon" /><span>Share</span>
-            </button>
-          </div>
+          <div id="forwardCurveTableContainer" class="forward-curve-table"></div>
         </div>
-        <div id="forwardCurveTableContainer" class="forward-curve-table"></div>
-      </div>
       </main>
     </div>
   </div>
@@ -267,7 +265,7 @@
       <a href=#>Model 2</a>
     </div>
   </div>
-    <div id="mobileFilterDrawer" class="mobile-filter-drawer">
+  <div id="mobileFilterDrawer" class="mobile-filter-drawer">
     <div class="drawer-header">
       <h4>DAILY CHART OPTIONS</h4>
       <button id="closeFilterDrawer" class="close-drawer" type="button">
@@ -373,4 +371,5 @@
   <script>window.Smallchat = window.Smallchat || {}, window.Smallchat.chat = { config: { accentColor: "#172b42", backgroundColor: "#f7f7f7", position: "right" } }</script>
   <script src="https://embed.small.chat/TC1E21RJ7C0900R4GL5U.js" async></script>
 </body>
+
 </html>
