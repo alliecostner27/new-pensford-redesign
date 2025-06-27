@@ -220,11 +220,10 @@ function drawChart(startDate = new Date(2019, 0, 1), endDate = new Date(2025, 11
       title: '',
       height: 500,
       curveType: 'function',
-      legend: { position: 'bottom' },
+      legend: { position: 'none' }, 
       chartArea: { width: '85%', height: '70%' },
       lineWidth: 2,
       hAxis: {
-        title: 'Reset Date',
         format: 'yyyy',
         slantedText: false,
         ticks: generateYearlyTicks(startDate, endDate),

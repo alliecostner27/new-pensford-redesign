@@ -322,7 +322,7 @@ thead th:first-child,
 }
 
 .toggle-switch .slider::before {
-  content: "NO";
+  content: "OFF";
   position: absolute;
   right: 6px;
   top: 3px;
@@ -335,7 +335,7 @@ thead th:first-child,
 }
 
 .toggle-switch input:checked+.slider::before {
-  content: "YES";
+  content: "ON";
   left: 6px;
   right: auto;
 }
