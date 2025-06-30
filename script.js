@@ -289,6 +289,40 @@ function drawChart(startDate = new Date(2019, 0, 1), endDate = new Date(2025, 11
   }
 }
 
+function applyURLSettings() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const settings = urlParams.get("settings");
+  const view = urlParams.get("viewMode");
+  const asOf = urlParams.get("asOf");
+  const historical = urlParams.get("historical");
+
+  // Apply checkboxes
+  if (settings) {
+    const selected = settings.split(",");
+    document.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+      cb.checked = selected.includes(cb.value);
+    });
+    visibleCheckboxes = ["Reset Date", ...selected.filter(val => val !== "Reset Date")];
+  }
+
+  // Apply view mode
+  if (view) viewMode = view;
+  if (document.querySelector(`[data-view="${view}"]`)) {
+    document.querySelectorAll(".view-btn").forEach(btn => btn.classList.remove("active"));
+    document.querySelector(`[data-view="${view}"]`).classList.add("active");
+  }
+
+  // Apply As Of toggle
+  if (asOf === "on") {
+    document.getElementById("actualsToggle")?.setAttribute("checked", true);
+  }
+
+  // Apply Historical toggle
+  if (historical === "on") {
+    document.getElementById("historicalToggle")?.setAttribute("checked", true);
+  }
+}
+
 // Trigger chart redraw when toggles or date dropdowns are changed
 function setupForwardCurveInteractionListeners() {
   const redraw = () => drawChart();
@@ -458,6 +492,7 @@ function updateFormattedDates() {
 
 document.addEventListener("DOMContentLoaded", () => {
   // Element references
+  applyURLSettings();
   const chartTab = document.getElementById("chartTab");
   const tableTab = document.getElementById("tableTab");
   const chartOptions = document.getElementById("chartOptions");
@@ -591,7 +626,55 @@ document.addEventListener("DOMContentLoaded", () => {
   if (el) el.addEventListener("change", debounceRedraw);
   });
 
-  
+    // Show modal
+document.getElementById("sharePageButton").addEventListener("click", () => {
+  document.getElementById("emailModal").style.display = "flex";
+});
+
+// Hide modal
+document.getElementById("cancelEmail").addEventListener("click", () => {
+  document.getElementById("emailModal").style.display = "none";
+});
+
+// Add additional email field
+document.getElementById("addEmail").addEventListener("click", () => {
+  const container = document.getElementById("emailFields");
+  const newInput = document.createElement("input");
+  newInput.type = "email";
+  newInput.className = "recipientEmail";
+  newInput.placeholder = "example@email.com";
+  newInput.required = true;
+  container.appendChild(newInput);
+});
+
+// Send email with settings
+document.getElementById("sendEmail").addEventListener("click", () => {
+  const emails = Array.from(document.querySelectorAll(".recipientEmail"))
+    .map(input => input.value.trim())
+    .filter(email => email !== "");
+
+  if (emails.length === 0) {
+    alert("Please enter at least one email address.");
+    return;
+  }
+
+  const selected = Array.from(document.querySelectorAll('input[type="checkbox"]:checked'))
+    .map(cb => cb.value)
+    .filter(val => val !== "Reset Date");
+
+  const url = new URL(window.location.href);
+  url.searchParams.set("settings", selected.join(","));
+  url.searchParams.set("viewMode", viewMode);
+  url.searchParams.set("asOf", document.getElementById("actualsToggle")?.checked ? "on" : "off");
+  url.searchParams.set("historical", document.getElementById("historicalToggle")?.checked ? "on" : "off");
+
+  const subject = encodeURIComponent("Pensford Forward Curve Settings");
+  const body = encodeURIComponent(`Here’s a link to view the Forward Curve with my selected settings:\n\n${url.href}`);
+
+  window.location.href = `mailto:${emails.join(",")}?subject=${subject}&body=${body}`;
+  document.getElementById("emailModal").style.display = "none";
+});
+
   setupForwardCurveInteractionListeners();
   drawChart(currentStartDate, currentEndDate);
   updateFormattedDates();
@@ -901,54 +984,5 @@ document.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
     visibleCheckboxes.unshift("Reset Date");
     processDataAndRedraw();
   });
-});
-
-// Open modal
-document.getElementById("sharePageButton").addEventListener("click", () => {
-  document.getElementById("emailModal").style.display = "flex";
-});
-
-// Close modal
-document.getElementById("cancelEmail").addEventListener("click", () => {
-  document.getElementById("emailModal").style.display = "none";
-});
-
-// Add another email field
-document.getElementById("addEmail").addEventListener("click", () => {
-  const emailDiv = document.createElement("div");
-  emailDiv.className = "email-input";
-  emailDiv.innerHTML = `<input type="email" class="recipientEmail" placeholder="example@email.com" required>`;
-  document.getElementById("emailFields").appendChild(emailDiv);
-});
-
-// Send email with selected checkboxes in query params
-document.getElementById("sendEmail").addEventListener("click", () => {
-  const emails = Array.from(document.querySelectorAll(".recipientEmail"))
-    .map(input => input.value.trim())
-    .filter(email => email !== "");
-
-  if (emails.length === 0) {
-    alert("Please enter at least one email address.");
-    return;
-  }
-
-  // Get selected checkboxes
-  const selected = Array.from(document.querySelectorAll('input[type="checkbox"]:checked'))
-    .map(cb => cb.value)
-    .filter(val => val !== "Reset Date");
-
-  // Build URL with query string
-  const url = new URL(window.location.href);
-  url.searchParams.set("settings", selected.join(","));
-
-  // Construct email
-  const subject = encodeURIComponent("Pensford Forward Curve Settings");
-  const body = encodeURIComponent(`Here’s a link to view the Forward Curve with your selected settings:\n\n${url.href}`);
-
-  // Open mail client
-  window.location.href = `mailto:${emails.join(",")}?subject=${subject}&body=${body}`;
-
-  // Close modal
-  document.getElementById("emailModal").style.display = "none";
 });
 
