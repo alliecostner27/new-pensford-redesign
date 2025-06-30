@@ -224,7 +224,17 @@ function drawChart(startDate = new Date(2019, 0, 1), endDate = new Date(2025, 11
       chartArea: { width: '85%', height: '70%' },
       lineWidth: 2,
       focusTarget: 'category',
-      tooltip: {trigger: 'both'},
+      tooltip: {
+        trigger: 'both',
+        textStyle: {
+          fontName: 'Kanit',
+          fontSize: 12,
+          bold: false,
+          color: '#333'
+        },
+        showColorCode: true, // shows the color boxes like in your screenshot
+        isHtml: false
+      },
       hAxis: {
         format: 'yyyy',
         slantedText: false,
