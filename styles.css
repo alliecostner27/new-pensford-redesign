@@ -146,13 +146,14 @@ h4 {
 
 .filter-section-date {
   display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
+  align-items: center;
+  gap: 3.5rem;
+  padding-top: 0.25rem;
 }
 
 .filter-section-date label {
   font-size: 0.85rem;
-  color: #444;
+  color: #919191;
 }
 
 .filter-section-date input[type="date"] {
@@ -160,7 +161,7 @@ h4 {
   border: 1px solid #ccc;
   border-radius: 6px;
   font-size: 0.9rem;
-  width: 100%;
+  width: 55%;
 }
 
 
@@ -183,7 +184,7 @@ h4 {
   font-weight: 400;
   margin: 0.4rem 0;
   padding-left: 0.2rem;
-  color: #172b42;
+  color: #808080;
   cursor: pointer;
 }
 
@@ -1356,7 +1357,7 @@ input[type="date"] {
   border-radius: 6px;
   background-color: #ffffff;
   box-shadow: 0 0.0625rem 0.125rem rgba(0, 0, 0, 0.08);
-  color: #172b42;
+  color: #BFBFBF;
   width: 8.75rem;
   transition: border-color 0.3s ease, box-shadow 0.3s ease;
 }
