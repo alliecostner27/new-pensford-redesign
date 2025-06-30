@@ -1227,67 +1227,89 @@ p {
   display: inline-block;
 }
 
-.modal-overlay {
+/* Modal overlay and positioning */
+#emailModal.modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: center;
+  z-index: 9999;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: none; /* default hidden */
   justify-content: center;
-  z-index: 999;
+  align-items: center;
 }
 
-.modal {
-  background: white;
-  padding: 1.25rem;
-  padding-right: 2.5rem;
-  border-radius: 0.75rem;
-  width: 20rem;
-  box-shadow: 0 0.375rem 1rem rgba(0, 0, 0, 0.25);
-  font-family: "Kanit", sans-serif;
+/* Modal box */
+#emailModal .modal {
+  background-color: #fff;
+  border-radius: 12px;
+  padding: 2rem;
+  width: 90%;
+  max-width: 420px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
 }
 
-.modal h3 {
-  margin-top: 0;
-  margin-bottom: 0.9375rem;
-  font-size: 1.125rem;
-  color: #172b42;
+/* Heading */
+#emailModal h3 {
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+  color: #0a2540;
 }
 
-.modal input[type="email"] {
-  width: 100%;
-  padding: 0.625rem;
-  margin: 0.5rem 0 1rem;
+/* Email field group */
+#emailFields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+#emailFields input[type="email"] {
+  padding: 0.6rem;
+  font-size: 1rem;
   border: 1px solid #ccc;
-  border-radius: 0.375rem;
+  border-radius: 6px;
+  width: 100%;
 }
 
+/* Add Email (+) button */
+#addEmail {
+  background: none;
+  color: #1a73e8;
+  font-weight: 600;
+  font-size: 0.95rem;
+  border: none;
+  cursor: pointer;
+  margin-bottom: 1.5rem;
+  padding: 0;
+}
+
+/* Modal buttons */
 .modal-buttons {
   display: flex;
   justify-content: flex-end;
-  gap: 0.625rem;
+  gap: 1rem;
 }
 
 .modal-buttons button {
-  padding: 0.5rem 0.875rem;
-  font-weight: bold;
+  padding: 0.5rem 1.25rem;
+  font-size: 1rem;
   border: none;
-  border-radius: 0.375rem;
+  border-radius: 6px;
   cursor: pointer;
-  font-family: "Kanit", sans-serif;
 }
 
 #cancelEmail {
-  background-color: #ddd;
+  background-color: #e0e0e0;
   color: #333;
 }
 
 #sendEmail {
-  background-color: #f7e48c;
-  color: #172b42;
+  background-color: #f4e278;
+  color: #0a2540;
+  font-weight: 600;
 }
 
 .listen-btn {

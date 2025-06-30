@@ -426,6 +426,36 @@ function populateAsOfDateSelectors() {
   }
 }
 
+function updateFormattedDates() {
+  const formatOptions = { year: "numeric", month: "long", day: "numeric" };
+
+  // Commentary
+  const commentaryEl = document.querySelector(".commentaryDate");
+  const commentaryInput = document.getElementById("commentaryDateInput");
+  if (commentaryEl) {
+    const commentaryDate = commentaryInput?.value ? new Date(commentaryInput.value) : new Date();
+    commentaryEl.textContent = commentaryDate.toLocaleDateString("en-US", formatOptions);
+  }
+
+  // Since
+  const sinceOut = document.getElementById("sinceFormattedDate");
+  const sincePicker = document.getElementById("sinceDateInput");
+  const sinceDropdown = getDateFromInputs("since");
+  const sinceDate = sincePicker?.value ? new Date(sincePicker.value) : sinceDropdown;
+  if (sinceOut && sinceDate) {
+    sinceOut.textContent = sinceDate.toLocaleDateString("en-US", formatOptions);
+  }
+
+  // As Of
+  const asOfOut = document.getElementById("asOfFormattedDate");
+  const asOfPicker = document.getElementById("asOfDateInput");
+  const asOfDropdown = getDateFromInputs("asOf");
+  const asOfDate = asOfPicker?.value ? new Date(asOfPicker.value) : asOfDropdown;
+  if (asOfOut && asOfDate) {
+    asOfOut.textContent = asOfDate.toLocaleDateString("en-US", formatOptions);
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   // Element references
   const chartTab = document.getElementById("chartTab");
@@ -491,19 +521,6 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
   });
-
-  // ---- Set Current Date for As-Of ----
-  const todayStr = new Date().toISOString().split("T")[0];
-  const asOfDesktop = document.getElementById("asOfDate");
-  const asOfMobile = document.getElementById("mobileAsOfDate");
-  if (asOfDesktop) {
-    asOfDesktop.value = todayStr;
-    asOfDesktop.disabled = true;
-  }
-  if (asOfMobile) {
-    asOfMobile.value = todayStr;
-    asOfMobile.disabled = true;
-  }
 
   // ---- Other Panel Toggles ----
   document.querySelectorAll(".tab-btn").forEach((button) => {
@@ -577,6 +594,7 @@ document.addEventListener("DOMContentLoaded", () => {
   
   setupForwardCurveInteractionListeners();
   drawChart(currentStartDate, currentEndDate);
+  updateFormattedDates();
 });
 
 function renderForwardCurveTable(startDateInput, endDateInput, mode = 'daily') {
@@ -684,9 +702,14 @@ function renderForwardCurveTable(startDateInput, endDateInput, mode = 'daily') {
         td.textContent = mode === 'yearly'
           ? date.getFullYear()
           : mode === 'monthly'
-            ? date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
-            : date.toLocaleDateString();
+            ? date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+            : date.toLocaleDateString('en-US', {
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric'
+              });
       } else {
+
         td.textContent = `${parseFloat(row[i]).toFixed(2)}%`;
       }
       tr.appendChild(td);
@@ -879,3 +902,53 @@ document.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
     processDataAndRedraw();
   });
 });
+
+// Open modal
+document.getElementById("sharePageButton").addEventListener("click", () => {
+  document.getElementById("emailModal").style.display = "flex";
+});
+
+// Close modal
+document.getElementById("cancelEmail").addEventListener("click", () => {
+  document.getElementById("emailModal").style.display = "none";
+});
+
+// Add another email field
+document.getElementById("addEmail").addEventListener("click", () => {
+  const emailDiv = document.createElement("div");
+  emailDiv.className = "email-input";
+  emailDiv.innerHTML = `<input type="email" class="recipientEmail" placeholder="example@email.com" required>`;
+  document.getElementById("emailFields").appendChild(emailDiv);
+});
+
+// Send email with selected checkboxes in query params
+document.getElementById("sendEmail").addEventListener("click", () => {
+  const emails = Array.from(document.querySelectorAll(".recipientEmail"))
+    .map(input => input.value.trim())
+    .filter(email => email !== "");
+
+  if (emails.length === 0) {
+    alert("Please enter at least one email address.");
+    return;
+  }
+
+  // Get selected checkboxes
+  const selected = Array.from(document.querySelectorAll('input[type="checkbox"]:checked'))
+    .map(cb => cb.value)
+    .filter(val => val !== "Reset Date");
+
+  // Build URL with query string
+  const url = new URL(window.location.href);
+  url.searchParams.set("settings", selected.join(","));
+
+  // Construct email
+  const subject = encodeURIComponent("Pensford Forward Curve Settings");
+  const body = encodeURIComponent(`Here’s a link to view the Forward Curve with your selected settings:\n\n${url.href}`);
+
+  // Open mail client
+  window.location.href = `mailto:${emails.join(",")}?subject=${subject}&body=${body}`;
+
+  // Close modal
+  document.getElementById("emailModal").style.display = "none";
+});
+
