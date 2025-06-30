@@ -223,6 +223,8 @@ function drawChart(startDate = new Date(2019, 0, 1), endDate = new Date(2025, 11
       legend: { position: 'none' }, 
       chartArea: { width: '85%', height: '70%' },
       lineWidth: 2,
+      focusTarget: 'category',
+      tooltip: {trigger: 'both'},
       hAxis: {
         format: 'yyyy',
         slantedText: false,
