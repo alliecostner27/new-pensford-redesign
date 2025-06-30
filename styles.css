@@ -300,8 +300,9 @@ thead th:first-child,
 
 .toggle-switch {
   position: relative;
-  width: 44px;
-  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .toggle-switch input {
@@ -310,36 +311,56 @@ thead th:first-child,
   height: 0;
 }
 
-.toggle-switch .slider {
-  position: absolute;
-  cursor: pointer;
+.slider {
+  position: relative;
+  width: 48px;
+  height: 26px;
   background-color: #ccc;
-  border-radius: 24px;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  transition: 0.3s;
+  border-radius: 34px;
+  transition: background-color 0.2s ease;
+  display: inline-block;
+  box-sizing: border-box;
 }
 
 .toggle-switch .slider::before {
   content: "OFF";
   position: absolute;
   right: 6px;
-  top: 3px;
+  top: 50%;
+  transform: translateY(-50%);
   font-size: 10px;
   color: white;
+  z-index: 1;
+  transition: content 0.2s ease, right 0.2s ease, left 0.2s ease;
 }
 
-.toggle-switch input:checked+.slider {
+.toggle-switch input:checked + .slider {
   background-color: #eada85;
 }
 
-.toggle-switch input:checked+.slider::before {
+.toggle-switch input:checked + .slider::before {
   content: "ON";
   left: 6px;
   right: auto;
 }
+
+.toggle-switch .slider::after {
+  content: "";
+  position: absolute;
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  top: 4px;
+  background-color: white;
+  border-radius: 50%;
+  transition: transform 0.2s ease;
+  z-index: 2;
+}
+
+.toggle-switch input:checked + .slider::after {
+  transform: translateX(20px);
+}
+
 
 .term-options {
   display: flex;
