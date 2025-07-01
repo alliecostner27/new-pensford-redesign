@@ -289,6 +289,71 @@ function drawChart(startDate = new Date(2019, 0, 1), endDate = new Date(2025, 11
   }
 }
 
+function downloadChartImage() {
+  const chartContainer = document.getElementById("chart_div");
+  if (!chartContainer) {
+    alert("Chart not found.");
+    return;
+  }
+
+  // Recreate the visible data subset
+  const filteredIndexes = transformedData[0]
+    .map((label, i) => (i === 0 || visibleCheckboxes.includes(label)) ? i : -1)
+    .filter(i => i !== -1);
+
+  const dataArray = transformedData.map(row => filteredIndexes.map(i => row[i]));
+  const data = google.visualization.arrayToDataTable(dataArray);
+
+  const options = {
+    title: '',
+    width: 1200,
+    height: 600,
+    curveType: 'function',
+    legend: { position: 'bottom' },
+    chartArea: { width: '85%', height: '70%' },
+    lineWidth: 2,
+    hAxis: {
+      format: 'yyyy',
+      slantedText: false,
+      ticks: generateYearlyTicks(currentStartDate, currentEndDate),
+      textStyle: { fontSize: 12 },
+      gridlines: { color: 'transparent' }
+    },
+    vAxis: {
+      format: '#.##%',
+      textStyle: { fontSize: 16 },
+      gridlines: { color: '#e0e0e0' },
+      baselineColor: '#333',
+      baseline: 0,
+      textPosition: 'out',
+      minorGridlines: { color: 'transparent' }
+    },
+    series: {}
+  };
+
+  // Render off-screen
+  const tempDiv = document.createElement("div");
+  tempDiv.style.position = "absolute";
+  tempDiv.style.left = "-9999px";
+  tempDiv.style.top = "0";
+  document.body.appendChild(tempDiv);
+
+  const tempChart = new google.visualization.LineChart(tempDiv);
+  google.visualization.events.addListener(tempChart, 'ready', () => {
+    const imgUri = tempChart.getImageURI();
+
+    const link = document.createElement("a");
+    link.href = imgUri;
+    link.download = "forward_curve_chart.png";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    document.body.removeChild(tempDiv); 
+  });
+
+  tempChart.draw(data, options);
+}
+
 function applyURLSettings() {
   const urlParams = new URLSearchParams(window.location.search);
   const settings = urlParams.get("settings");
