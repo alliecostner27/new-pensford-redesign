@@ -631,6 +631,11 @@ document.getElementById("sharePageButton").addEventListener("click", () => {
   document.getElementById("emailModal").style.display = "flex";
 });
 
+// Show modal from TABLE share button
+document.getElementById("sharePageButtonTable").addEventListener("click", () => {
+  document.getElementById("emailModal").style.display = "flex";
+});
+
 // Hide modal
 document.getElementById("cancelEmail").addEventListener("click", () => {
   document.getElementById("emailModal").style.display = "none";
