@@ -7,7 +7,6 @@ let activeRange = "3y";
 let visibleCheckboxes = ["Reset Date", "1M Term SOFR", "3M Term SOFR", "30D Average SOFR (NYFED)"];
 let viewMode = "daily";
 let tableViewMode = "daily";
-let dataCache = { key: null, grouped: null, averaged: null };
 
 let redrawTimeout;
 function debounceRedraw() {
@@ -17,8 +16,6 @@ function debounceRedraw() {
   }, 250); 
 }
 
-let cachedParams = {};
-let cachedGroupedData = [];
 function transformData(rawData) {
   if (!rawData || rawData.length < 2) {
     console.warn("No raw data available for transformation.");
@@ -137,39 +134,6 @@ function loadData() {
     .catch((error) => {
       console.error("Fetch error:", error);
     });
-}
-
-// Helper to parse dropdown-based date selectors
-function parseSelectorDate(dayId, monthId, yearId) {
-  const day = document.getElementById(dayId)?.value;
-  const month = document.getElementById(monthId)?.value;
-  const year = document.getElementById(yearId)?.value;
-
-  if (!day || !month || !year) return null;
-
-  const parsed = new Date(`${month} ${day}, ${year}`);
-  return isNaN(parsed.getTime()) ? null : parsed;
-}
-
-function getYearTicks(startDate, endDate) {
-  const ticks = [];
-  const startYear = startDate.getFullYear();
-  const endYear = endDate.getFullYear();
-  for (let year = startYear; year <= endYear; year++) {
-    ticks.push(new Date(year, 0, 1)); // Jan 1 of each year
-  }
-  return ticks;
-}
-
-function generateYearTicks(startDate, endDate) {
-  const ticks = [];
-  const current = new Date(startDate.getFullYear(), 0, 1);
-  const final = new Date(endDate.getFullYear(), 0, 1);
-  while (current <= final) {
-    ticks.push(new Date(current));
-    current.setFullYear(current.getFullYear() + 1);
-  }
-  return ticks;
 }
 
 function drawChart(startDate = new Date(2019, 0, 1), endDate = new Date(2025, 11, 31)) {
@@ -453,16 +417,6 @@ function populateSinceDateSelectors() {
     if (y === now.getFullYear()) opt.selected = true;
     sinceYear.appendChild(opt);
   }
-
-  // Add event listeners to trigger re-render
-  ["sinceDay", "sinceMonth", "sinceYear"].forEach((id) => {
-    const el = document.getElementById(id);
-    if (el) {
-      el.addEventListener("change", () => {
-        processDataAndRedraw();
-      });
-    }
-  });
 }
 
 document.addEventListener("DOMContentLoaded", populateSinceDateSelectors);
@@ -525,37 +479,44 @@ function populateAsOfDateSelectors() {
   }
 }
 
-function updateFormattedDates() {
-  const formatOptions = { year: "numeric", month: "long", day: "numeric" };
+function populateCommentaryDateSelector() {
+  const commentaryInput = document.getElementById("commentaryDate");
+  const commentaryOut = document.querySelector(".commentaryDate");
 
-  // Commentary
-  const commentaryEl = document.querySelector(".commentaryDate");
-  const commentaryInput = document.getElementById("commentaryDateInput");
-  if (commentaryEl) {
-    const commentaryDate = commentaryInput?.value ? new Date(commentaryInput.value) : new Date();
-    commentaryEl.textContent = commentaryDate.toLocaleDateString("en-US", formatOptions);
+  if (!commentaryInput || !commentaryOut) return;
+
+  // Set default to today if not set
+  if (!commentaryInput.value) {
+    const today = new Date().toISOString().split("T")[0];
+    commentaryInput.value = today;
   }
 
-  // Since
-  const sinceOut = document.getElementById("sinceFormattedDate");
-  const sincePicker = document.getElementById("sinceDateInput");
-  const sinceDropdown = getDateFromInputs("since");
-  const sinceDate = sincePicker?.value ? new Date(sincePicker.value) : sinceDropdown;
-  if (sinceOut && sinceDate) {
-    sinceOut.textContent = sinceDate.toLocaleDateString("en-US", formatOptions);
-  }
+  // Function to update display
+  const updateCommentaryDisplay = () => {
+    const selectedDate = new Date(commentaryInput.value);
+    const formatted = selectedDate.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric"
+    });
+    commentaryOut.textContent = formatted;
+  };
 
-  // As Of
-  const asOfOut = document.getElementById("asOfFormattedDate");
-  const asOfPicker = document.getElementById("asOfDateInput");
-  const asOfDropdown = getDateFromInputs("asOf");
-  const asOfDate = asOfPicker?.value ? new Date(asOfPicker.value) : asOfDropdown;
-  if (asOfOut && asOfDate) {
-    asOfOut.textContent = asOfDate.toLocaleDateString("en-US", formatOptions);
-  }
+  // Initial display update
+  updateCommentaryDisplay();
+
+  // Update on change
+  commentaryInput.addEventListener("change", updateCommentaryDisplay);
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  const today = new Date().toISOString().split("T")[0];
+  const asOfInput = document.getElementById("asOfDate");
+  const sinceInput = document.getElementById("sinceDate");
+  const commentaryInput = document.getElementById("commentaryDate");
+
+  if (asOfInput && !asOfInput.value) asOfInput.value = today;
+  if (sinceInput && !sinceInput.value) sinceInput.value = today;
   // Element references
   applyURLSettings();
   const chartTab = document.getElementById("chartTab");
@@ -685,6 +646,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   populateSinceDateSelectors();
   populateAsOfDateSelectors();
+  populateCommentaryDateSelector();
 
   ["historicalToggle", "actualsToggle", "sinceDay", "sinceMonth", "sinceYear", "asOfDay", "asOfMonth", "asOfYear"].forEach(id => {
   const el = document.getElementById(id);
@@ -747,7 +709,6 @@ document.getElementById("sendEmail").addEventListener("click", () => {
 
   setupForwardCurveInteractionListeners();
   drawChart(currentStartDate, currentEndDate);
-  updateFormattedDates();
 });
 
 function renderForwardCurveTable(startDateInput, endDateInput, mode = 'daily') {
@@ -874,8 +835,6 @@ function renderForwardCurveTable(startDateInput, endDateInput, mode = 'daily') {
   table.appendChild(tbody);
   container.innerHTML = "";
   container.appendChild(table);
-
-  console.log("Table rendering complete.");
 }
 
 document.querySelectorAll(".term-btn").forEach((btn) => {
@@ -967,7 +926,7 @@ document.getElementById("resetCheckboxesBtn")?.addEventListener("click", () => {
     .forEach((cb) => {
       cb.checked = !1;
     });
-  visibleCheckboxes = ["Date"];
+  visibleCheckboxes = ["Reset Date"];
   processDataAndRedraw();
 });
 
