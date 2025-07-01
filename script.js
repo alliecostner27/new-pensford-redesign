@@ -720,7 +720,7 @@ function renderForwardCurveTable(startDateInput, endDateInput, mode = 'daily') {
   const container = document.getElementById("forwardCurveTableContainer");
   if (!container) return;
 
-  // Parse dates safely
+  // Parse safe fallback dates
   const parseDate = val => {
     const d = new Date(val);
     return isNaN(d.getTime()) ? null : d;
@@ -728,9 +728,6 @@ function renderForwardCurveTable(startDateInput, endDateInput, mode = 'daily') {
 
   const startDate = window.currentStartDate || new Date(2019, 0, 1);
   const endDate = window.currentEndDate || new Date(2025, 11, 31);
-
-  console.log("Table Start Date:", startDate.toISOString());
-  console.log("Table End Date:", endDate.toISOString());
 
   const fullHeader = transformedData[0];
   const dateIndex = 0;
@@ -741,10 +738,7 @@ function renderForwardCurveTable(startDateInput, endDateInput, mode = 'daily') {
     return -1;
   }).filter(i => i !== -1);
 
-  console.log("Visible Columns (indexes):", colIndexes);
-  console.log("Visible Column Labels:", visibleCheckboxes);
-
-  // Filter rows within selected date range
+  // Filter rows in range
   const filteredRows = transformedData.slice(1).filter(row => {
     const rowDate = new Date(row[dateIndex]).setHours(0, 0, 0, 0);
     const start = new Date(startDate).setHours(0, 0, 0, 0);
@@ -752,16 +746,10 @@ function renderForwardCurveTable(startDateInput, endDateInput, mode = 'daily') {
     return rowDate >= start && rowDate <= end;
   });
 
-  console.log("Filtered rows within date range:", filteredRows.length);
-  if (filteredRows.length === 0) {
-    console.warn("No rows matched the date range.");
-  }
-
-  // Handle grouping for monthly or yearly modes
+  // Group data if needed
   let groupedRows;
   if (mode === 'monthly' || mode === 'yearly') {
     const grouped = {};
-
     filteredRows.forEach(row => {
       const date = new Date(row[0]);
       const key = mode === 'monthly'
@@ -787,14 +775,11 @@ function renderForwardCurveTable(startDateInput, endDateInput, mode = 'daily') {
       avg[0] = group.sampleDate;
       return avg;
     });
-
-    console.log(`Grouped (${mode}) row count:`, groupedRows.length);
   } else {
     groupedRows = filteredRows;
-    console.log("Daily (raw) row count:", groupedRows.length);
   }
 
-  // Table rendering
+  // Build table
   const table = document.createElement("table");
   const thead = document.createElement("thead");
   const tbody = document.createElement("tbody");
@@ -807,6 +792,36 @@ function renderForwardCurveTable(startDateInput, endDateInput, mode = 'daily') {
   });
   thead.appendChild(headerRow);
 
+  // Copy buttons under headers
+  const copyRow = document.createElement("tr");
+  colIndexes.forEach((i, colIdx) => {
+    const td = document.createElement("td");
+    const btn = document.createElement("button");
+    btn.textContent = "Copy";
+    btn.addEventListener("click", () => {
+      const values = groupedRows.map(row => {
+        const val = row[i];
+        if (i === 0) {
+          const date = new Date(val);
+          return mode === 'yearly'
+            ? date.getFullYear()
+            : mode === 'monthly'
+              ? date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+              : date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+        } else {
+          return `${parseFloat(val).toFixed(2)}%`;
+        }
+      });
+      navigator.clipboard.writeText(values.join("\n")).then(() => {
+        alert(`Column ${fullHeader[i]} copied to clipboard.`);
+      });
+    });
+    td.appendChild(btn);
+    copyRow.appendChild(td);
+  });
+  thead.appendChild(copyRow);
+
+  // Fill table body
   groupedRows.forEach(row => {
     const tr = document.createElement("tr");
     colIndexes.forEach(i => {
@@ -817,13 +832,8 @@ function renderForwardCurveTable(startDateInput, endDateInput, mode = 'daily') {
           ? date.getFullYear()
           : mode === 'monthly'
             ? date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-            : date.toLocaleDateString('en-US', {
-                month: 'long',
-                day: 'numeric',
-                year: 'numeric'
-              });
+            : date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
       } else {
-
         td.textContent = `${parseFloat(row[i]).toFixed(2)}%`;
       }
       tr.appendChild(td);
@@ -831,11 +841,35 @@ function renderForwardCurveTable(startDateInput, endDateInput, mode = 'daily') {
     tbody.appendChild(tr);
   });
 
+  // Replace table content
+  container.innerHTML = "";
   table.appendChild(thead);
   table.appendChild(tbody);
-  container.innerHTML = "";
   container.appendChild(table);
 }
+document.getElementById("copyAllBtn").addEventListener("click", () => {
+  const table = document.querySelector("#forwardCurveTableContainer table");
+  if (!table) {
+    alert("No table to copy.");
+    return;
+  }
+
+  let data = "";
+  const rows = table.querySelectorAll("tr");
+
+  rows.forEach((row, rowIndex) => {
+    // Skip the copy button row (second row in thead)
+    if (row.closest("thead") && rowIndex === 1) return;
+
+    const cells = row.querySelectorAll("th, td");
+    const rowData = Array.from(cells).map(cell => cell.textContent.trim());
+    data += rowData.join("\t") + "\n";
+  });
+
+  navigator.clipboard.writeText(data).then(() => {
+    alert("All table data copied to clipboard.");
+  });
+});
 
 document.querySelectorAll(".term-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
