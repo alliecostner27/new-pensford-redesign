@@ -542,8 +542,10 @@ document.addEventListener("DOMContentLoaded", () => {
       chartContent.style.display = "block";
       tableContent.style.display = "none";
 
-      // When chart tab is shown, draw chart
-      drawChart(currentStartDate, currentEndDate);
+      // When chart tab is shown, redraw chart with current dates
+      setTimeout(() => {
+        window.dispatchEvent(new Event("resize"));
+      }, 50);
     });
 
     tableTab.addEventListener("click", () => {
