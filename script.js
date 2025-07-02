@@ -1,12 +1,18 @@
-google.charts.load("current", {
-  packages: ["corechart", "bar"],
-});
+// === GOOGLE CHARTS ===
+google.charts.load("current", { packages: ["corechart", "bar"] });
 google.charts.setOnLoadCallback(loadData);
-let fullData = [], headers = [], transformedData = [];
-let activeRange = "3y";
+
+// === GLOBAL DATASETS ===
+let fullProjectionData = null;    // From "Market Expectations"
+let fullHistoricalData = null;    // From "Historical/Real"
+let transformedData = [];         // Data sent to chart/table
+let headers = [];                 // Column headers (shared between both)
+
+// === FILTERING + VIEW STATE ===
+let activeRange = "3y";           // Default date range
+let viewMode = "daily";           // Options: daily | monthly
+let tableViewMode = "daily";      // Separate for table if needed
 let visibleCheckboxes = ["Reset Date", "1M Term SOFR", "3M Term SOFR", "30D Average SOFR (NYFED)"];
-let viewMode = "daily";
-let tableViewMode = "daily";
 
 let redrawTimeout;
 function debounceRedraw() {
@@ -38,8 +44,12 @@ function transformData(rawData) {
 
     for (let j = 0; j < row.length; j++) {
       if (j === resetDateIndex) {
-        const date = new Date(row[j]);
-        if (isNaN(date.getTime())) break;
+        const raw = row[j];
+        const date = new Date(raw); // now correctly handles ISO string
+        if (isNaN(date.getTime())) {
+          console.warn(`❌ Invalid date at row ${i}:`, raw);
+          break; // skip row
+        }
         newRow.push(date);
       } else {
         const val = parseFloat(row[j]);
@@ -52,110 +62,130 @@ function transformData(rawData) {
     }
   }
 
+  console.log("✅ transformData() rows returned:", cleaned.length);
   return cleaned;
 }
 
-function processDataAndRedraw() {
-  if (!fullData || fullData.length < 2) {
-    console.error("No full data to process.");
-    return;
+function loadData() {
+  const showHistorical = document.getElementById("historicalToggle")?.checked ?? false;
+
+  if (showHistorical) {
+    // Load both sheets in parallel
+    const historicalURL = "https://script.google.com/macros/s/AKfycbzhcymTfhNgFb_RJLSOYvtTihmh8lgdzr3sD4HuHYPaJ5L5lGKhMUsmdLyhnPar9ij5bw/exec?sheet=Historical/Real";
+    const projectionURL = "https://script.google.com/macros/s/AKfycbzhcymTfhNgFb_RJLSOYvtTihmh8lgdzr3sD4HuHYPaJ5L5lGKhMUsmdLyhnPar9ij5bw/exec?sheet=Market Expectations";
+
+    Promise.all([
+      fetch(historicalURL).then(res => res.json()),
+      fetch(projectionURL).then(res => res.json())
+    ])
+    .then(([historical, projection]) => {
+      if (!historical || !projection || historical.length < 2 || projection.length < 2) {
+        console.error("Missing or insufficient data in one of the sources.");
+        return;
+      }
+
+      fullHistoricalData = transformData(historical);
+      fullProjectionData = transformData(projection);
+      headers = fullProjectionData[0]; // assume same headers
+
+      processDataAndRedraw();
+    })
+    .catch(error => {
+      console.error("Error loading both sheets:", error);
+    });
+
+  } else {
+    // Load only projection
+    const url = "https://script.google.com/macros/s/AKfycbzhcymTfhNgFb_RJLSOYvtTihmh8lgdzr3sD4HuHYPaJ5L5lGKhMUsmdLyhnPar9ij5bw/exec?sheet=Market Expectations";
+
+    fetch(url)
+      .then(res => res.json())
+      .then(data => {
+        if (!data || data.length < 2) {
+          console.error("Projection sheet is empty or invalid.");
+          return;
+        }
+
+        fullProjectionData = transformData(data);
+        headers = fullProjectionData[0];
+        fullHistoricalData = null; // Clear if previously loaded
+
+        processDataAndRedraw();
+      })
+      .catch(error => {
+        console.error("Error loading projection sheet:", error);
+      });
   }
+}
+function processDataAndRedraw() {
+  const showHistorical = document.getElementById("historicalToggle")?.checked ?? false;
 
   const dateIndex = headers.indexOf("Reset Date");
   if (dateIndex === -1) {
-    console.error("'Reset Date' column not found.");
+    console.error("'Reset Date' column missing");
     return;
   }
 
-  // Extract valid dates
-  const allDates = fullData.slice(1)
-    .map(row => new Date(row[dateIndex]))
-    .filter(d => !isNaN(d));
+  const sinceDateStr = document.getElementById("startDateInput")?.value;
+  const endDateStr = document.getElementById("endDateInput")?.value;
 
-  if (!allDates.length) {
-    console.error("No valid dates found in dataset.");
-    return;
-  }
+  const sinceDate = sinceDateStr ? new Date(sinceDateStr) : null;
+  const endDate = endDateStr ? new Date(endDateStr) : null;
 
-  // Determine fallback date range: 10 years from earliest date
-  const minDataDate = new Date(Math.min(...allDates));
-  const defaultStart = new Date(minDataDate.getFullYear(), 0, 1);
-  const defaultEnd = new Date(minDataDate.getFullYear() + 10, 11, 31);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
 
-  // Use input values if available
-  const inputStart = document.getElementById("startDateInput")?.value;
-  const inputEnd = document.getElementById("endDateInput")?.value;
+  let chartData = [];
 
-  const startDate = inputStart ? new Date(inputStart) : defaultStart;
-  const endDate = inputEnd ? new Date(inputEnd) : defaultEnd;
-
-  console.log("Using Start:", startDate, "End:", endDate);
-
-  // Filter rows within date range
-  const filteredRows = fullData.slice(1).filter(row => {
-    const d = new Date(row[dateIndex]);
-    return d >= startDate && d <= endDate;
-  });
-
-  console.log("Parsed rows in date range:", filteredRows.length);
-  if (!filteredRows.length) {
-    console.warn("No data rows passed the date range filter.");
-  }
-
-  // Build transformedData to be used by drawChart
-  transformedData = [headers, ...filteredRows];
-  drawChart(); // Call chart rendering
-}
-
-function loadData() {
-  const url =
-    "https://script.google.com/macros/s/AKfycbzHFuyzb14srQh4moOB2fXzu_hFKA9QFaroaCgEdsS5b17ikQHqj-KvQ_EkTshqIUZvCg/exec?sheet=Floating";
-
-  fetch(url)
-    .then((response) => response.json())
-    .then((data) => {
-      console.log("Raw fetched data:", data);
-      if (!data || data.length < 2) {
-        console.error("Insufficient data from Apps Script");
-        return;
-      }
-
-      const transformed = transformData(data);
-
-      if (transformed.length < 2) {
-        console.error("No valid rows after transformation.");
-        return;
-      }
-
-      fullData = transformed;
-      headers = transformed[0];
-      processDataAndRedraw();
-    })
-    .catch((error) => {
-      console.error("Fetch error:", error);
+  if (showHistorical && fullHistoricalData && fullProjectionData) {
+    const histRows = fullHistoricalData.slice(1).filter(row => {
+      const d = new Date(row[dateIndex]);
+      return (!sinceDate || d >= sinceDate) && d <= yesterday;
     });
+
+    const projRows = fullProjectionData.slice(1).filter(row => {
+      const d = new Date(row[dateIndex]);
+      return (!endDate || d <= endDate) && d >= today;
+    });
+
+    chartData = [headers, ...histRows, ...projRows];
+  } else {
+    const projRows = fullProjectionData.slice(1).filter(row => {
+      const d = new Date(row[dateIndex]);
+      return (!sinceDate || d >= sinceDate) && (!endDate || d <= endDate);
+    });
+
+    chartData = [headers, ...projRows];
+  }
+
+  transformedData = chartData;
+  drawChart(sinceDate, endDate);
 }
 
-function drawChart(startDate = new Date(2019, 0, 1), endDate = new Date(2025, 11, 31)) {
-  if (!transformedData || transformedData.length < 2) {
-    console.warn("Not enough data to draw the chart.");
-    return;
+function drawChart(startDate, endDate) {
+  if (!transformedData || transformedData.length < 2) return;
+
+  // Ensure start and end dates are valid
+  if (!startDate || isNaN(startDate.getTime())) {
+    startDate = transformedData[1]?.[0] instanceof Date ? transformedData[1][0] : new Date();
+  }
+  if (!endDate || isNaN(endDate.getTime())) {
+    const lastRow = transformedData[transformedData.length - 1];
+    endDate = lastRow?.[0] instanceof Date ? lastRow[0] : new Date();
   }
 
   window.currentStartDate = startDate;
   window.currentEndDate = endDate;
 
-  console.log("Drawing chart with range:", startDate, "to", endDate);
-
   const fullHeader = transformedData[0];
 
-  // Filter columns based on visibleCheckboxes
   const filteredIndexes = fullHeader
     .map((label, i) => (i === 0 || visibleCheckboxes.includes(label)) ? i : -1)
     .filter(i => i !== -1);
 
   if (filteredIndexes.length <= 1) {
-    console.warn("Please select at least one data series to render the chart.");
     const chartDiv = document.getElementById("chart_div");
     if (chartDiv) {
       chartDiv.innerHTML = "<p style='color:red;'>Please select at least one data series to display the chart.</p>";
@@ -163,10 +193,8 @@ function drawChart(startDate = new Date(2019, 0, 1), endDate = new Date(2025, 11
     return;
   }
 
-  //Build data array with only selected columns
   let dataArray = transformedData.map(row => filteredIndexes.map(i => row[i]));
 
-  //Smoothing toggle
   const smoothingToggle = document.getElementById("smoothingToggle");
   if (smoothingToggle?.checked) {
     dataArray = smoothData(dataArray, 5);
@@ -184,7 +212,7 @@ function drawChart(startDate = new Date(2019, 0, 1), endDate = new Date(2025, 11
       title: '',
       height: 500,
       curveType: 'function',
-      legend: { position: 'none' }, 
+      legend: { position: 'none' },
       chartArea: { width: '85%', height: '70%' },
       lineWidth: 2,
       focusTarget: 'category',
@@ -196,7 +224,7 @@ function drawChart(startDate = new Date(2019, 0, 1), endDate = new Date(2025, 11
           bold: false,
           color: '#333'
         },
-        showColorCode: true, // shows the color boxes like in your screenshot
+        showColorCode: true,
         isHtml: false
       },
       hAxis: {
@@ -219,25 +247,36 @@ function drawChart(startDate = new Date(2019, 0, 1), endDate = new Date(2025, 11
     };
 
     const colorMap = {
-      "1M Term SOFR": "#1976d2",              
-      "3M Term SOFR": "#388e3c",              
-      "30D Average SOFR (NYFED)": "#f57c00"   
+      "1M Term SOFR": "#1976d2",
+      "3M Term SOFR": "#388e3c",
+      "30D Average SOFR (NYFED)": "#f57c00",
+      "Overnight SOFR": "#6a1b9a",
+      "Simple Average SOFR": "#00838f",
+      "1M ISDA SOFR": "#5d4037",
+      "Prime": "#e65100",
+      "FOMC DOT Plot": "#2e7d32"
     };
 
     for (let i = 1; i < header.length; i++) {
       const label = header[i];
-      const color = colorMap[label] || "#9e9e9e"; 
+      const color = colorMap[label] || "#9e9e9e";
 
       const seriesOptions = {
         color: highlightActuals && label.includes("Actual") ? "#d32f2f" : color
       };
 
       if (showHistorical) {
-        const hasHistorical = dataArray.some(row => row[0] instanceof Date && row[0] < asOfDate);
-        if (hasHistorical) {
-          seriesOptions.lineDashStyle = [4, 4];
+        const hasOnlyHistorical = dataArray.every(row => row[0] instanceof Date && row[0] < new Date());
+        if (hasOnlyHistorical) {
+          seriesOptions.color = "#4caf50"; // green
+          seriesOptions.lineDashStyle = [4, 4]; // dashed
+        } else {
+          seriesOptions.color = "#000000"; // black solid for projections
         }
-      }
+      } else {
+        seriesOptions.color = color;
+    }
+
 
       options.series[i - 1] = seriesOptions;
     }
@@ -245,11 +284,12 @@ function drawChart(startDate = new Date(2019, 0, 1), endDate = new Date(2025, 11
     const chart = new google.visualization.LineChart(document.getElementById("chart_div"));
     chart.draw(data, options);
 
-    //Update the table to match current view
     renderForwardCurveTable(startDate, endDate, viewMode);
-
   } catch (err) {
-    console.error("Chart rendering error:", err);
+    const chartDiv = document.getElementById("chart_div");
+    if (chartDiv) {
+      chartDiv.innerHTML = `<p style='color:red;'>Chart failed to render: ${err.message}</p>`;
+    }
   }
 }
 
@@ -1014,12 +1054,19 @@ function smoothData(dataArray, windowSize = 5) {
 }
 
 function generateYearlyTicks(startDate, endDate) {
-  const ticks = [];
-  let current = new Date(startDate.getFullYear(), 0, 1);
-  while (current <= endDate) {
-    ticks.push(new Date(current));
-    current.setFullYear(current.getFullYear() + 1);
+  if (!startDate || !endDate || !(startDate instanceof Date) || !(endDate instanceof Date)) {
+    console.warn("⚠️ Invalid start or end date passed to generateYearlyTicks");
+    return [];
   }
+
+  const ticks = [];
+  const startYear = startDate.getFullYear();
+  const endYear = endDate.getFullYear();
+
+  for (let year = startYear; year <= endYear; year++) {
+    ticks.push(new Date(year, 0, 1));
+  }
+
   return ticks;
 }
 
