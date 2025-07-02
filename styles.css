@@ -100,6 +100,21 @@ h4 {
   gap: 0.5rem;
 }
 
+.copy-col-btn, .copy-all-btn{
+  background-color: #f0f0f0;
+  border: none;
+  padding: 0.5rem 1rem;
+  font-weight: bold;
+  font-family: "Kanit", sans-serif;
+  font-size: 0.875rem;
+  color: #172b42;
+  margin-top: 0.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
 
 .filter-panel {
   width: 380px;

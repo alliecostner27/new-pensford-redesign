@@ -792,31 +792,70 @@ function renderForwardCurveTable(startDateInput, endDateInput, mode = 'daily') {
   });
   thead.appendChild(headerRow);
 
-  // Copy buttons under headers
+  // Copy buttons under headers (skip Reset Date column)
   const copyRow = document.createElement("tr");
   colIndexes.forEach((i, colIdx) => {
+    const thLabel = typeof fullHeader[i] === "object" ? fullHeader[i].label : fullHeader[i];
     const td = document.createElement("td");
-    const btn = document.createElement("button");
-    btn.textContent = "Copy";
-    btn.addEventListener("click", () => {
-      const values = groupedRows.map(row => {
-        const val = row[i];
-        if (i === 0) {
-          const date = new Date(val);
-          return mode === 'yearly'
-            ? date.getFullYear()
-            : mode === 'monthly'
-              ? date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-              : date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-        } else {
-          return `${parseFloat(val).toFixed(2)}%`;
-        }
+    if (thLabel === "Reset Date") {
+      // Add the "Copy All" button under Reset Date
+      const btn = document.createElement("button");
+      btn.textContent = "Copy All";
+      btn.className = "copy-all-btn";
+      btn.addEventListener("click", () => {
+        // Copy all table data (excluding copy button row)
+        let data = "";
+        // Header row
+        const headerLabels = colIndexes.map(idx =>
+          typeof fullHeader[idx] === "object" ? fullHeader[idx].label : fullHeader[idx]
+        );
+        data += headerLabels.join("\t") + "\n";
+        // Data rows
+        groupedRows.forEach(row => {
+          const rowData = colIndexes.map(idx => {
+            if (idx === 0) {
+              const date = new Date(row[idx]);
+              return mode === 'yearly'
+                ? date.getFullYear()
+                : mode === 'monthly'
+                  ? date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+                  : date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+            } else {
+              return `${parseFloat(row[idx]).toFixed(2)}%`;
+            }
+          });
+          data += rowData.join("\t") + "\n";
+        });
+        navigator.clipboard.writeText(data).then(() => {
+          alert("All table data copied to clipboard.");
+        });
       });
-      navigator.clipboard.writeText(values.join("\n")).then(() => {
-        alert(`Column ${fullHeader[i]} copied to clipboard.`);
+      td.appendChild(btn);
+    } else if (thLabel !== "Reset Date") {
+      const btn = document.createElement("button");
+      btn.textContent = "Copy";
+      btn.className = "copy-col-btn"; 
+      btn.setAttribute("data-col-index", i); 
+      btn.addEventListener("click", () => {
+        const values = groupedRows.map(row => {
+          const val = row[i];
+          if (i === 0) {
+            const date = new Date(val);
+            return mode === 'yearly'
+              ? date.getFullYear()
+              : mode === 'monthly'
+                ? date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+                : date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+          } else {
+            return `${parseFloat(val).toFixed(2)}%`;
+          }
+        });
+        navigator.clipboard.writeText(values.join("\n")).then(() => {
+          alert(`Column ${fullHeader[i]} copied to clipboard.`);
+        });
       });
-    });
-    td.appendChild(btn);
+      td.appendChild(btn);
+    }
     copyRow.appendChild(td);
   });
   thead.appendChild(copyRow);
@@ -847,29 +886,6 @@ function renderForwardCurveTable(startDateInput, endDateInput, mode = 'daily') {
   table.appendChild(tbody);
   container.appendChild(table);
 }
-document.getElementById("copyAllBtn").addEventListener("click", () => {
-  const table = document.querySelector("#forwardCurveTableContainer table");
-  if (!table) {
-    alert("No table to copy.");
-    return;
-  }
-
-  let data = "";
-  const rows = table.querySelectorAll("tr");
-
-  rows.forEach((row, rowIndex) => {
-    // Skip the copy button row (second row in thead)
-    if (row.closest("thead") && rowIndex === 1) return;
-
-    const cells = row.querySelectorAll("th, td");
-    const rowData = Array.from(cells).map(cell => cell.textContent.trim());
-    data += rowData.join("\t") + "\n";
-  });
-
-  navigator.clipboard.writeText(data).then(() => {
-    alert("All table data copied to clipboard.");
-  });
-});
 
 document.querySelectorAll(".term-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
