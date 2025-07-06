@@ -117,6 +117,7 @@ function loadData() {
       });
   }
 }
+
 function processDataAndRedraw() {
   const showHistorical = document.getElementById("historicalToggle")?.checked ?? false;
 
@@ -126,14 +127,22 @@ function processDataAndRedraw() {
     return;
   }
 
-  const sinceDateStr = document.getElementById("startDateInput")?.value;
-  const endDateStr = document.getElementById("endDateInput")?.value;
-
+  // Use correct input field for 'since' date
+  const sinceDateStr = document.getElementById("sinceDate")?.value;
   const sinceDate = sinceDateStr ? new Date(sinceDateStr) : null;
-  const endDate = endDateStr ? new Date(endDateStr) : null;
 
+  if (!sinceDate || isNaN(sinceDate.getTime())) {
+    console.warn("⚠️ Invalid or missing 'since' date input");
+    return;
+  }
+
+  // Set today and 10-year forward limit
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+
+  const endDate = new Date(sinceDate);
+  endDate.setFullYear(endDate.getFullYear() + 10);
+
   const yesterday = new Date(today);
   yesterday.setDate(today.getDate() - 1);
 
@@ -142,32 +151,43 @@ function processDataAndRedraw() {
   if (showHistorical && fullHistoricalData && fullProjectionData) {
     const histRows = fullHistoricalData.slice(1).filter(row => {
       const d = new Date(row[dateIndex]);
-      return (!sinceDate || d >= sinceDate) && d <= yesterday;
+      return d >= sinceDate && d <= yesterday;
     });
 
     const projRows = fullProjectionData.slice(1).filter(row => {
       const d = new Date(row[dateIndex]);
-      return (!endDate || d <= endDate) && d >= today;
+      return d >= today && d <= endDate;
     });
 
     chartData = [headers, ...histRows, ...projRows];
-  } else {
+  } else if (fullProjectionData) {
     const projRows = fullProjectionData.slice(1).filter(row => {
       const d = new Date(row[dateIndex]);
-      return (!sinceDate || d >= sinceDate) && (!endDate || d <= endDate);
+      return d >= sinceDate && d <= endDate;
     });
 
     chartData = [headers, ...projRows];
+  } else {
+    console.error("❌ No projection data available");
+    return;
   }
 
   transformedData = chartData;
+
+  console.log("📊 Chart Data Range", {
+    sinceDate,
+    endDate,
+    totalRows: chartData.length,
+    preview: chartData.slice(0, 5)
+  });
+
   drawChart(sinceDate, endDate);
 }
 
 function drawChart(startDate, endDate) {
   if (!transformedData || transformedData.length < 2) return;
 
-  // Ensure start and end dates are valid
+  // Ensure fallback dates
   if (!startDate || isNaN(startDate.getTime())) {
     startDate = transformedData[1]?.[0] instanceof Date ? transformedData[1][0] : new Date();
   }
@@ -180,6 +200,11 @@ function drawChart(startDate, endDate) {
   window.currentEndDate = endDate;
 
   const fullHeader = transformedData[0];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const showHistorical = document.getElementById("historicalToggle")?.checked ?? false;
+  const highlightActuals = document.getElementById("actualsToggle")?.checked ?? false;
 
   const filteredIndexes = fullHeader
     .map((label, i) => (i === 0 || visibleCheckboxes.includes(label)) ? i : -1)
@@ -193,8 +218,10 @@ function drawChart(startDate, endDate) {
     return;
   }
 
+  // Apply column filter
   let dataArray = transformedData.map(row => filteredIndexes.map(i => row[i]));
 
+  // Smoothing if toggle is on
   const smoothingToggle = document.getElementById("smoothingToggle");
   if (smoothingToggle?.checked) {
     dataArray = smoothData(dataArray, 5);
@@ -203,10 +230,6 @@ function drawChart(startDate, endDate) {
   try {
     const data = google.visualization.arrayToDataTable(dataArray);
     const header = dataArray[0];
-
-    const asOfDate = getDateFromInputs("asOf") || new Date();
-    const highlightActuals = document.getElementById("actualsToggle")?.checked ?? false;
-    const showHistorical = document.getElementById("historicalToggle")?.checked ?? false;
 
     const options = {
       title: '',
@@ -221,7 +244,6 @@ function drawChart(startDate, endDate) {
         textStyle: {
           fontName: 'Kanit',
           fontSize: 12,
-          bold: false,
           color: '#333'
         },
         showColorCode: true,
@@ -257,28 +279,32 @@ function drawChart(startDate, endDate) {
       "FOMC DOT Plot": "#2e7d32"
     };
 
+    // Assign color per series based on whether it has only historical or mixed
     for (let i = 1; i < header.length; i++) {
       const label = header[i];
-      const color = colorMap[label] || "#9e9e9e";
+      let hasHistorical = false;
+      let hasProjection = false;
 
-      const seriesOptions = {
-        color: highlightActuals && label.includes("Actual") ? "#d32f2f" : color
-      };
-
-      if (showHistorical) {
-        const hasOnlyHistorical = dataArray.every(row => row[0] instanceof Date && row[0] < new Date());
-        if (hasOnlyHistorical) {
-          seriesOptions.color = "#4caf50"; // green
-          seriesOptions.lineDashStyle = [4, 4]; // dashed
-        } else {
-          seriesOptions.color = "#000000"; // black solid for projections
+      for (let j = 1; j < dataArray.length; j++) {
+        const rowDate = dataArray[j][0];
+        const value = dataArray[j][i];
+        if (value != null) {
+          if (rowDate < today) hasHistorical = true;
+          if (rowDate >= today) hasProjection = true;
         }
-      } else {
-        seriesOptions.color = color;
-    }
+      }
 
+      let seriesColor = colorMap[label] || "#000000";
 
-      options.series[i - 1] = seriesOptions;
+      if (showHistorical && hasHistorical && !hasProjection) {
+        seriesColor = "#4caf50"; // historical only — green
+      } else if (highlightActuals && label.toLowerCase().includes("actual")) {
+        seriesColor = "#d32f2f"; // red for actuals toggle
+      }
+
+      options.series[i - 1] = {
+        color: seriesColor
+      };
     }
 
     const chart = new google.visualization.LineChart(document.getElementById("chart_div"));
