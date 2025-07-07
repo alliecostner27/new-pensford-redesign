@@ -257,43 +257,61 @@ function processDataAndRedraw() {
   const sinceDateStr = document.getElementById("sinceDateInput")?.value;
   const sinceDate = sinceDateStr ? new Date(sinceDateStr) : null;
 
-  console.log("showHistorical toggle?", showHistorical);
-  console.log("sinceDate input:", sinceDateStr, "| parsed:", sinceDate);
+  console.log("📌 showHistorical toggle?", showHistorical);
+  console.log("📅 sinceDate input:", sinceDateStr, "| parsed:", sinceDate);
 
-  const cleanedProjection = Array.isArray(fullProjectionData) ? fullProjectionData : [];
-  const cleanedHistorical = Array.isArray(fullHistoricalData) ? fullHistoricalData : [];
+  let cleanedProjection = Array.isArray(fullProjectionData) ? fullProjectionData : [];
+  let cleanedHistorical = Array.isArray(fullHistoricalData) ? fullHistoricalData : [];
+
+  console.log("📦 cleanedProjection", cleanedProjection?.slice?.(0, 3));
+  console.log("📦 cleanedHistorical", cleanedHistorical?.slice?.(0, 3));
 
   let merged = [];
+  const shouldMerge = showHistorical && cleanedHistorical.length > 1;
 
-  if (showHistorical && cleanedHistorical.length > 1) {
-    console.log("Running mergeWithHistorical with sinceDate:", sinceDate);
+  if (shouldMerge) {
+    console.log("✅ Running mergeWithHistorical");
     merged = mergeWithHistorical(cleanedProjection, cleanedHistorical, sinceDate);
   } else {
-    console.log("Skipping historical merge. Using projections only.");
+    console.log("❌ mergeWithHistorical skipped: using projection-only fallback");
     merged = cleanedProjection;
   }
 
-  //Safeguard against invalid results
   if (!merged || merged.length < 2) {
-    console.error("No data to draw after merging.");
+    console.error("❌ No data to render after processing.");
     return;
+  }
+
+  // ✅ Final filter to honor sinceDate across the entire merged dataset
+  if (sinceDate instanceof Date && !isNaN(sinceDate.getTime())) {
+    const headerRow = merged[0];
+    merged = [headerRow, ...merged.slice(1).filter(row => {
+      const date = row[0];
+      return date instanceof Date && date >= sinceDate;
+    })];
   }
 
   transformedData = merged;
 
-  //Compute visible chart window
-  const dataStart = merged[1]?.[0];
-  const defaultStart = new Date();
-  defaultStart.setFullYear(defaultStart.getFullYear() - 1);
+  // ✅ Now define currentStartDate and currentEndDate window
+  const earliestDate = transformedData[1]?.[0];
+  const fallbackStart = new Date();
+  fallbackStart.setFullYear(fallbackStart.getFullYear() - 1);
 
-  const viewStart = dataStart instanceof Date ? dataStart : defaultStart;
+  const viewStart = earliestDate instanceof Date ? earliestDate : fallbackStart;
+
+  // Dynamically choose end date based on activeRange (3y, 5y, 10y)
+  let yearsToAdd = 10;
+  if (activeRange === "5y") yearsToAdd = 5;
+  else if (activeRange === "3y") yearsToAdd = 3;
+
   const viewEnd = new Date(viewStart);
-  viewEnd.setFullYear(viewEnd.getFullYear() + (document.getElementById("5Y")?.checked ? 5 : 10));
+  viewEnd.setFullYear(viewEnd.getFullYear() + yearsToAdd);
 
   window.currentStartDate = viewStart;
   window.currentEndDate = viewEnd;
 
-  console.log("Drawing chart with data range:", viewStart.toISOString(), "to", viewEnd.toISOString());
+  console.log("🧪 FINAL transformedData HEADERS:", transformedData[0]);
   drawChart(viewStart, viewEnd);
 }
 
@@ -1187,41 +1205,28 @@ document.getElementById("sendEmail").addEventListener("click", () => {
   drawChart(currentStartDate, currentEndDate);
 });
 
-document.querySelectorAll(".term-btn").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    // Toggle .active state
-    document
-      .querySelectorAll(".term-btn")
-      .forEach((b) => b.classList.remove("active"));
-    btn.classList.add("active");
-
-    // Determine selected term
-    const term = btn.getAttribute("data-term");
-    if (term === "5Y") {
-      activeRange = "5y";
-    } else if (term === "10Y") {
-      activeRange = "10y";
-    } else {
-      activeRange = "custom";
-    }
-    processDataAndRedraw();
+function handleRangeButtonClick(button) {
+  // Remove 'active' from all buttons in both groups
+  document.querySelectorAll(".term-btn, .range-btn").forEach((btn) => {
+    btn.classList.remove("active");
   });
+  button.classList.add("active");
+
+  // Determine selected range
+  const label = button.textContent.toLowerCase();
+  if (label.includes("3")) activeRange = "3y";
+  else if (label.includes("5")) activeRange = "5y";
+  else if (label.includes("10")) activeRange = "10y";
+  else activeRange = "all";
+
+  processDataAndRedraw();
+}
+
+// Attach to both types
+document.querySelectorAll(".term-btn, .range-btn").forEach((btn) => {
+  btn.addEventListener("click", () => handleRangeButtonClick(btn));
 });
 
-document.querySelectorAll(".range-btn").forEach((button) => {
-  button.addEventListener("click", () => {
-    document
-      .querySelectorAll(".range-btn")
-      .forEach((btn) => btn.classList.remove("active"));
-    button.classList.add("active");
-    const label = button.textContent.toLowerCase();
-    if (label.includes("3")) activeRange = "3y";
-    else if (label.includes("5")) activeRange = "5y";
-    else if (label.includes("10")) activeRange = "10y";
-    else activeRange = "all";
-    drawChart();
-  });
-});
 
 document.getElementById("applyCustomRange")?.addEventListener("click", () => {
   activeRange = "custom";
