@@ -487,7 +487,7 @@ function drawChart(startDate, endDate) {
         isHtml: false
       },
       hAxis: {
-        title: 'Date',
+        title: '',
         format: 'yyyy',
         slantedText: false,
         ticks: generateYearlyTicks(startDate, endDate),
