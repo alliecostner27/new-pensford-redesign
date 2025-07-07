@@ -47,7 +47,7 @@ function transformData(rawData) {
         const raw = row[j];
         const date = new Date(raw); 
         if (isNaN(date.getTime())) {
-          console.warn(`❌ Invalid date at row ${i}:`, raw);
+          console.warn(`Invalid date at row ${i}:`, raw);
           break; 
         }
         newRow.push(date);
@@ -62,7 +62,7 @@ function transformData(rawData) {
     }
   }
 
-  console.log("✅ transformData() rows returned:", cleaned.length);
+  console.log("transformData() rows returned:", cleaned.length);
   return cleaned;
 }
 
@@ -131,7 +131,7 @@ function processDataAndRedraw() {
   const sinceDate = sinceDateStr ? new Date(sinceDateStr) : null;
 
   if (!sinceDate || isNaN(sinceDate.getTime())) {
-    console.warn("⚠️ Invalid or missing 'since' date input");
+    console.warn("Invalid or missing 'since' date input");
     return;
   }
 
@@ -1080,7 +1080,7 @@ function smoothData(dataArray, windowSize = 5) {
 
 function generateYearlyTicks(startDate, endDate) {
   if (!startDate || !endDate || !(startDate instanceof Date) || !(endDate instanceof Date)) {
-    console.warn("⚠️ Invalid start or end date passed to generateYearlyTicks");
+    console.warn("Invalid start or end date passed to generateYearlyTicks");
     return [];
   }
 
