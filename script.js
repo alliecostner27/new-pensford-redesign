@@ -112,11 +112,11 @@ function loadData() {
       const rawProjection = response.projection;
       const rawHistorical = response.historical;
 
-      console.log("📦 rawProjectionData preview:", rawProjection?.slice?.(0, 3));
-      console.log("📦 rawHistoricalData preview:", rawHistorical?.slice?.(0, 3));
+      console.log("rawProjectionData preview:", rawProjection?.slice?.(0, 3));
+      console.log("rawHistoricalData preview:", rawHistorical?.slice?.(0, 3));
 
       if (!Array.isArray(rawProjection)) {
-        console.error("❌ 'projection' is not a valid array:", rawProjection);
+        console.error("'projection' is not a valid array:", rawProjection);
         return;
       }
 
@@ -127,12 +127,12 @@ function loadData() {
 
       if (showHistorical) {
         if (!Array.isArray(rawHistorical)) {
-          console.error("❌ 'historical' is not a valid array:", rawHistorical);
+          console.error("'historical' is not a valid array:", rawHistorical);
           return;
         }
 
-        fullHistoricalData = transformData(rawHistorical); // ✅ required line
-        console.log("✅ fullHistoricalData rows:", fullHistoricalData?.length);
+        fullHistoricalData = transformData(rawHistorical); // required line
+        console.log("fullHistoricalData rows:", fullHistoricalData?.length);
       } else {
         fullHistoricalData = null;
       }
@@ -140,13 +140,13 @@ function loadData() {
       processDataAndRedraw();
     })
     .catch(error => {
-      console.error("❌ Error fetching data from Apps Script:", error);
+      console.error("Error fetching data from Apps Script:", error);
     });
 }
 
 function transformData(rawData) {
   if (!rawData || rawData.length < 2 || !Array.isArray(rawData)) {
-    console.warn("⚠️ transformData(): No raw data available for transformation.");
+    console.warn("transformData(): No raw data available for transformation.");
     return [];
   }
 
@@ -154,13 +154,13 @@ function transformData(rawData) {
   const headerRow = rawData[0].map(cell =>
     typeof cell === "string" ? cell.trim() : cell
   );
-  console.log("🧪 Raw HEADER:", headerRow);
+  console.log("Raw HEADER:", headerRow);
 
   const dateColIndex = headerRow.findIndex(h => h === "Reset Date");
-  console.log("🔎 Found 'Reset Date' at index:", dateColIndex);
+  console.log("Found 'Reset Date' at index:", dateColIndex);
 
   if (dateColIndex === -1) {
-    console.error("❌ transformData(): 'Reset Date' column not found.");
+    console.error("transformData(): 'Reset Date' column not found.");
     return [];
   }
 
@@ -183,7 +183,7 @@ function transformData(rawData) {
     // Log samples if needed
     if (i >= 100 && i < 125) {
       console.log(
-        `🧪 Row ${i} raw date value:`,
+        `Row ${i} raw date value:`,
         dateValue,
         "| type:",
         typeof dateValue
@@ -194,26 +194,26 @@ function transformData(rawData) {
     validRowCount++;
   }
 
-  console.log(`✅ transformData() rows returned: ${validRowCount}`);
+  console.log(`transformData() rows returned: ${validRowCount}`);
   return transformed;
 }
 
 function transformData(rawData) {
   if (!rawData || rawData.length < 2 || !Array.isArray(rawData)) {
-    console.warn("⚠️ transformData(): No raw data available for transformation.");
+    console.warn("transformData(): No raw data available for transformation.");
     return [];
   }
 
   const headerRow = rawData[0].map(cell =>
     typeof cell === "string" ? cell.trim() : cell
   );
-  console.log("🧪 Raw HEADER:", headerRow);
+  console.log("Raw HEADER:", headerRow);
 
   const dateColIndex = headerRow.findIndex(h => h === "Reset Date");
-  console.log("🔎 Found 'Reset Date' at index:", dateColIndex);
+  console.log("Found 'Reset Date' at index:", dateColIndex);
 
   if (dateColIndex === -1) {
-    console.error("❌ transformData(): 'Reset Date' column not found.");
+    console.error("transformData(): 'Reset Date' column not found.");
     return [];
   }
 
@@ -232,7 +232,7 @@ function transformData(rawData) {
 
     if (i >= 100 && i < 125) {
       console.log(
-        `🧪 Row ${i} raw date value:`,
+        `Row ${i} raw date value:`,
         dateValue,
         "| type:",
         typeof dateValue
@@ -244,11 +244,11 @@ function transformData(rawData) {
   }
 
   if (validRowCount === 0) {
-    console.warn("⚠️ transformData(): No valid rows after date parsing.");
+    console.warn("transformData(): No valid rows after date parsing.");
     return [];
   }
 
-  console.log(`✅ transformData() rows returned: ${validRowCount}`);
+  console.log(`transformData() rows returned: ${validRowCount}`);
   return transformed;
 }
 
@@ -257,8 +257,8 @@ function processDataAndRedraw() {
   const sinceDateStr = document.getElementById("sinceDateInput")?.value;
   const sinceDate = sinceDateStr ? new Date(sinceDateStr) : null;
 
-  console.log("📌 showHistorical toggle?", showHistorical);
-  console.log("📅 sinceDate input:", sinceDateStr, "| parsed:", sinceDate);
+  console.log("showHistorical toggle?", showHistorical);
+  console.log("sinceDate input:", sinceDateStr, "| parsed:", sinceDate);
 
   const cleanedProjection = Array.isArray(fullProjectionData) ? fullProjectionData : [];
   const cleanedHistorical = Array.isArray(fullHistoricalData) ? fullHistoricalData : [];
@@ -266,22 +266,22 @@ function processDataAndRedraw() {
   let merged = [];
 
   if (showHistorical && cleanedHistorical.length > 1) {
-    console.log("✅ Running mergeWithHistorical with sinceDate:", sinceDate);
+    console.log("Running mergeWithHistorical with sinceDate:", sinceDate);
     merged = mergeWithHistorical(cleanedProjection, cleanedHistorical, sinceDate);
   } else {
-    console.log("❌ Skipping historical merge. Using projections only.");
+    console.log("Skipping historical merge. Using projections only.");
     merged = cleanedProjection;
   }
 
-  // ❗ Safeguard against invalid results
+  //Safeguard against invalid results
   if (!merged || merged.length < 2) {
-    console.error("❌ No data to draw after merging.");
+    console.error("No data to draw after merging.");
     return;
   }
 
   transformedData = merged;
 
-  // 🧠 Compute visible chart window
+  //Compute visible chart window
   const dataStart = merged[1]?.[0];
   const defaultStart = new Date();
   defaultStart.setFullYear(defaultStart.getFullYear() - 1);
@@ -293,13 +293,13 @@ function processDataAndRedraw() {
   window.currentStartDate = viewStart;
   window.currentEndDate = viewEnd;
 
-  console.log("📈 Drawing chart with data range:", viewStart.toISOString(), "to", viewEnd.toISOString());
+  console.log("Drawing chart with data range:", viewStart.toISOString(), "to", viewEnd.toISOString());
   drawChart(viewStart, viewEnd);
 }
 
 function mergeWithHistorical(proj, hist, sinceDate) {
   if (!Array.isArray(proj) || proj.length < 2 || !Array.isArray(hist) || hist.length < 2) {
-    console.error("❌ mergeWithHistorical: Missing or empty data arrays.");
+    console.error("mergeWithHistorical: Missing or empty data arrays.");
     return proj;
   }
 
@@ -309,7 +309,7 @@ function mergeWithHistorical(proj, hist, sinceDate) {
 
   const dateMap = new Map();
 
-  // ✅ 1. Filtered Historical Rows
+  // Filtered Historical Rows
   for (let i = 1; i < hist.length; i++) {
     const row = hist[i];
     const date = row[0];
@@ -317,7 +317,7 @@ function mergeWithHistorical(proj, hist, sinceDate) {
     // Ensure it's a valid Date
     if (!(date instanceof Date) || isNaN(date)) continue;
 
-    // ✅ Skip if before sinceDate
+    // Skip if before sinceDate
     if (sinceDate instanceof Date && !isNaN(sinceDate) && date < sinceDate) {
       continue;
     }
@@ -375,7 +375,7 @@ function mergeWithHistorical(proj, hist, sinceDate) {
     mergedRows.push(row);
   }
 
-  console.log("✅ mergeWithHistorical complete:", mergedRows.length, "rows");
+  console.log("mergeWithHistorical complete:", mergedRows.length, "rows");
   return mergedRows;
 }
 
@@ -409,10 +409,8 @@ function drawChart(startDate, endDate) {
     .filter(i => i !== -1);
 
   if (filteredIndexes.length <= 1) {
-    const chartDiv = document.getElementById("chart_div");
-    if (chartDiv) {
-      chartDiv.innerHTML = "<p style='color:red;'>Please select at least one data series to display the chart.</p>";
-    }
+    document.getElementById("chart_div").innerHTML =
+      "<p style='color:red;'>Please select at least one data series to display the chart.</p>";
     return;
   }
 
@@ -436,36 +434,22 @@ function drawChart(startDate, endDate) {
   }
   if (!isFinite(minY)) minY = 0;
   if (!isFinite(maxY)) maxY = 1;
+  const paddedMinY = minY;
   const paddedMaxY = maxY + (maxY - minY) * 0.05;
 
-  // Add vertical divider only if historical toggle is ON
-  let dividerDate = null;
-  if (showHistorical) {
-    // Use the first projected date to divide
-    const projIndex = fullHeader.findIndex(h => h.includes("(Proj)"));
-    if (projIndex !== -1) {
-      for (let i = 1; i < transformedData.length; i++) {
-        const val = transformedData[i][projIndex];
-        if (typeof val === "number") {
-          dividerDate = transformedData[i][0];
-          break;
-        }
-      }
+  const includeDivider = showHistorical;
+  if (includeDivider) {
+    dataArray[0].push("Divider");
+    const numCols = dataArray[0].length;
+    const nulls = Array(numCols - 2).fill(null);
+    const dividerDate = new Date(today);
+
+    for (let i = 1; i < dataArray.length; i++) {
+      dataArray[i].push(null);
     }
 
-    if (dividerDate instanceof Date) {
-      const dividerLabel = "Divider";
-      dataArray[0].push(dividerLabel);
-      const colCount = dataArray[0].length;
-      const nulls = new Array(colCount - 2).fill(null);
-
-      for (let i = 1; i < dataArray.length; i++) {
-        dataArray[i].push(null);
-      }
-
-      dataArray.push([dividerDate, ...nulls, minY]);
-      dataArray.push([dividerDate, ...nulls, paddedMaxY]);
-    }
+    dataArray.push([dividerDate, ...nulls, paddedMinY]);
+    dataArray.push([dividerDate, ...nulls, paddedMaxY]);
   }
 
   try {
@@ -479,19 +463,31 @@ function drawChart(startDate, endDate) {
       legend: { position: 'none' },
       chartArea: { width: '85%', height: '70%' },
       lineWidth: 2,
-      focusTarget: 'category',
+      focusTarget: 'category', 
       tooltip: {
         trigger: 'both',
-        textStyle: { fontName: 'Kanit', fontSize: 12, color: '#333' },
+        textStyle: {
+          fontName: 'Kanit',
+          fontSize: 12,
+          color: '#333'
+        },
         showColorCode: true,
         isHtml: false
       },
+      crosshair: {
+        trigger: 'selection',       // Only show line on hover of a point
+        orientation: 'vertical',
+        color: '#000000'             
+      },
       hAxis: {
-        title: '',
+        title: 'Date',
         format: 'yyyy',
         slantedText: false,
         ticks: generateYearlyTicks(startDate, endDate),
-        viewWindow: { min: startDate, max: endDate },
+        viewWindow: {
+          min: startDate,
+          max: endDate
+        },
         textStyle: { fontSize: 12 },
         gridlines: { color: 'transparent' }
       },
@@ -504,7 +500,7 @@ function drawChart(startDate, endDate) {
         textPosition: 'out',
         minorGridlines: { color: 'transparent' }
       },
-      series: {}
+      series: {} 
     };
 
     const colorMap = {
@@ -537,21 +533,19 @@ function drawChart(startDate, endDate) {
       let seriesColor = colorMap[baseLabel] || "#000000";
 
       if (isHistoricalOnly) {
-        seriesColor = "#4caf50";
+        seriesColor = "#4caf50"; // green
       } else if (highlightActuals && baseLabel.toLowerCase().includes("actual")) {
-        seriesColor = "#d32f2f";
+        seriesColor = "#d32f2f"; // red
       }
 
       options.series[i - 1] = { color: seriesColor };
     }
 
-    // Divider series (always last)
-    if (showHistorical && dividerDate) {
+    if (includeDivider) {
       options.series[header.length - 2] = {
         color: 'black',
         lineDashStyle: null,
-        lineWidth: 2,
-        enableInteractivity: false
+        lineWidth: 2
       };
     }
 
@@ -575,12 +569,6 @@ function renderForwardCurveTable(_startDateInput, _endDateInput, mode = 'daily')
 
   const container = document.getElementById("forwardCurveTableContainer");
   if (!container) return;
-
-  // Parse safe fallback dates
-  // const parseDate = val => {
-  //   const d = new Date(val);
-  //   return isNaN(d.getTime()) ? null : d;
-  // };
 
   const startDate = window.currentStartDate || new Date(2019, 0, 1);
   const endDate = window.currentEndDate || new Date(2025, 11, 31);
@@ -932,7 +920,6 @@ function populateAsOfDateSelectors() {
     }
   }
 
-  // Populate month options (Jan–Dec)
   if (asOfMonth) {
     const monthNames = [
       "January",
@@ -957,7 +944,6 @@ function populateAsOfDateSelectors() {
     }
   }
 
-  // Populate year options (current year ± 5)
   if (asOfYear) {
     for (let y = year - 5; y <= year + 5; y++) {
       const opt = document.createElement("option");
@@ -981,7 +967,6 @@ function populateCommentaryDateSelector() {
     commentaryInput.value = today;
   }
 
-  // Function to update display
   const updateCommentaryDisplay = () => {
     const selectedDate = new Date(commentaryInput.value);
     const formatted = selectedDate.toLocaleDateString("en-US", {
@@ -1007,7 +992,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (asOfInput && !asOfInput.value) asOfInput.value = today;
   if (sinceInput && !sinceInput.value) sinceInput.value = today;
-  // Element references
   applyURLSettings();
   const chartTab = document.getElementById("chartTab");
   const tableTab = document.getElementById("tableTab");
@@ -1144,7 +1128,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const el = document.getElementById(id);
   if (el) el.addEventListener("change", debounceRedraw);
   });
-
 
     // Show moda
 document.getElementById("sharePageButton").addEventListener("click", () => {
@@ -1314,14 +1297,14 @@ document.addEventListener("DOMContentLoaded", function () {
 
   if (historicalToggle) {
     historicalToggle.addEventListener("change", () => {
-      console.log("🔁 Historical toggle changed. Reloading data...");
+      console.log("Historical toggle changed. Reloading data...");
       loadData(); 
     });
   }
 
   if (sinceDateInput) {
     sinceDateInput.addEventListener("change", () => {
-      console.log("📅 Since date changed — redrawing chart");
+      console.log("Since date changed — redrawing chart");
       processDataAndRedraw();
     });
   }

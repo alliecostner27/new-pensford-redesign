@@ -672,6 +672,17 @@ box-sizing:border-box
   z-index: 10;
 }
 
+#hoverLine {
+  position: absolute;
+  width: 1px;
+  background-color: black;
+  height: 100%;
+  top: 0;
+  pointer-events: none;
+  display: none;
+  z-index: 9999;
+}
+
 .chart-overlay-toggle {
 position:absolute;
 top:.625rem;
