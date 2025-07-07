@@ -362,13 +362,14 @@ function mergeWithHistorical(proj, hist, sinceDate) {
 function drawChart(startDate, endDate) {
   if (!transformedData || transformedData.length < 2) return;
 
-  if (!startDate || isNaN(startDate.getTime())) {
-    startDate = transformedData[1]?.[0] instanceof Date ? transformedData[1][0] : new Date();
-  }
-  if (!endDate || isNaN(endDate.getTime())) {
-    const lastRow = transformedData[transformedData.length - 1];
-    endDate = lastRow?.[0] instanceof Date ? lastRow[0] : new Date();
-  }
+  // Determine earliest and latest date in data to set full range for x-axis ticks
+  const allDates = transformedData.slice(1).map(row => row[0]).filter(d => d instanceof Date);
+  const minDate = new Date(Math.min(...allDates.map(d => d.getTime())));
+  const maxDate = new Date(Math.max(...allDates.map(d => d.getTime())));
+
+  // Ensure fallback dates using full range
+  if (!startDate || isNaN(startDate.getTime())) startDate = minDate;
+  if (!endDate || isNaN(endDate.getTime())) endDate = maxDate;
 
   window.currentStartDate = startDate;
   window.currentEndDate = endDate;
@@ -396,8 +397,10 @@ function drawChart(startDate, endDate) {
     return;
   }
 
+  // Apply column filter
   let dataArray = transformedData.map(row => filteredIndexes.map(i => row[i]));
 
+  // Smoothing if toggle is on
   const smoothingToggle = document.getElementById("smoothingToggle");
   if (smoothingToggle?.checked) {
     dataArray = smoothData(dataArray, 5);
@@ -428,7 +431,7 @@ function drawChart(startDate, endDate) {
       hAxis: {
         format: 'yyyy',
         slantedText: false,
-        ticks: generateYearlyTicks(startDate, endDate),
+        ticks: generateYearlyTicks(minDate, maxDate),
         textStyle: { fontSize: 12 },
         gridlines: { color: 'transparent' }
       },
@@ -456,23 +459,29 @@ function drawChart(startDate, endDate) {
     };
 
     for (let i = 1; i < header.length; i++) {
-      const label = header[i]; // e.g. "1M Term SOFR (Hist)" or "Prime (Proj)"
-      const isHist = label.includes(" (Hist)");
-      const isProj = label.includes(" (Proj)");
-      const baseLabel = label.replace(" (Hist)", "").replace(" (Proj)", "");
+      const label = header[i];
+      let hasHistorical = false;
+      let hasProjection = false;
 
-      let seriesColor = colorMap[baseLabel] || "#000000";
+      for (let j = 1; j < dataArray.length; j++) {
+        const rowDate = dataArray[j][0];
+        const value = dataArray[j][i];
+        if (value != null) {
+          if (rowDate < today) hasHistorical = true;
+          if (rowDate >= today) hasProjection = true;
+        }
+      }
 
-      if (highlightActuals && label.toLowerCase().includes("actual")) {
-        seriesColor = "#d32f2f"; // red for actual
-      } else if (showHistorical && isHist) {
-        seriesColor = "#4caf50"; // green for historical-only
+      let seriesColor = colorMap[label.replace(" (Hist)", "").replace(" (Proj)", "")] || "#000000";
+
+      if (showHistorical && hasHistorical && !hasProjection) {
+        seriesColor = "#4caf50"; // green for historical only
+      } else if (highlightActuals && label.toLowerCase().includes("actual")) {
+        seriesColor = "#d32f2f"; // red for actuals
       }
 
       options.series[i - 1] = {
-        color: seriesColor,
-        lineDashStyle: null, // you can use [4,2] for dashed projections if desired
-        lineWidth: 2
+        color: seriesColor
       };
     }
 
