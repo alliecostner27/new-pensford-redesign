@@ -663,6 +663,15 @@ width:100%;
 box-sizing:border-box
 }
 
+.vertical-divider {
+  position: absolute;
+  top: 60px; 
+  bottom: 100px; 
+  width: 2px;
+  background-color: black;
+  z-index: 10;
+}
+
 .chart-overlay-toggle {
 position:absolute;
 top:.625rem;
