@@ -3,8 +3,8 @@ google.charts.load("current", { packages: ["corechart", "bar"] });
 google.charts.setOnLoadCallback(loadData);
 
 // === GLOBAL DATASETS ===
-let fullProjectionData = null;    // From "Market Expectations"
-let fullHistoricalData = null;    // From "Historical/Real"
+let fullProjectionData = null;    // "Market Expectations" sheet
+let fullHistoricalData = null;    // "Historical/Real" sheet
 let transformedData = [];         // Data sent to chart/table
 let headers = [];                 // Column headers (shared between both)
 
@@ -45,10 +45,10 @@ function transformData(rawData) {
     for (let j = 0; j < row.length; j++) {
       if (j === resetDateIndex) {
         const raw = row[j];
-        const date = new Date(raw); // now correctly handles ISO string
+        const date = new Date(raw); 
         if (isNaN(date.getTime())) {
           console.warn(`❌ Invalid date at row ${i}:`, raw);
-          break; // skip row
+          break; 
         }
         newRow.push(date);
       } else {
@@ -86,7 +86,7 @@ function loadData() {
 
       fullHistoricalData = transformData(historical);
       fullProjectionData = transformData(projection);
-      headers = fullProjectionData[0]; // assume same headers
+      headers = fullProjectionData[0]; 
 
       processDataAndRedraw();
     })
@@ -127,7 +127,6 @@ function processDataAndRedraw() {
     return;
   }
 
-  // Use correct input field for 'since' date
   const sinceDateStr = document.getElementById("sinceDate")?.value;
   const sinceDate = sinceDateStr ? new Date(sinceDateStr) : null;
 
@@ -168,13 +167,13 @@ function processDataAndRedraw() {
 
     chartData = [headers, ...projRows];
   } else {
-    console.error("❌ No projection data available");
+    console.error("No projection data available");
     return;
   }
 
   transformedData = chartData;
 
-  console.log("📊 Chart Data Range", {
+  console.log("Chart Data Range", {
     sinceDate,
     endDate,
     totalRows: chartData.length,
@@ -526,7 +525,7 @@ function populateAsOfDateSelectors() {
     ];
     for (let m = 0; m < 12; m++) {
       const opt = document.createElement("option");
-      opt.value = m.toString(); // still 0-indexed for JS Date
+      opt.value = m.toString(); 
       opt.textContent = monthNames[m];
       if (m === month) opt.selected = true;
       asOfMonth.appendChild(opt);
