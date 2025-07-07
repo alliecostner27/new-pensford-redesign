@@ -294,62 +294,74 @@ function mergeWithHistorical(proj, hist, sinceDate) {
     return proj;
   }
 
-  const projHeaders = proj[0];
-  const histHeaders = hist[0];
+  const projHeaders = proj[0].slice(1); // drop "Reset Date"
+  const histHeaders = hist[0].slice(1); // drop "Reset Date"
+  const commonHeaders = projHeaders.filter(label => histHeaders.includes(label));
 
-  const mergedHeaders = projHeaders;
+  const dateMap = new Map();
 
-  // Build a map of date → values from projection
-  const projMap = new Map();
-  for (let i = 1; i < proj.length; i++) {
-    const row = proj[i];
-    if (row[0] instanceof Date) {
-      projMap.set(+row[0], row);
-    }
-  }
-
-  const combined = [mergedHeaders];
-
+  // Add historical rows
   for (let i = 1; i < hist.length; i++) {
     const row = hist[i];
     const date = row[0];
-
     if (!(date instanceof Date)) continue;
     if (sinceDate && date < sinceDate) continue;
 
-    const newRow = [date];
+    const key = +date;
+    if (!dateMap.has(key)) dateMap.set(key, { date, hist: {}, proj: {} });
 
-    for (let j = 1; j < histHeaders.length; j++) {
-      const label = histHeaders[j];
-      const projIndex = projHeaders.indexOf(label);
-      const val = typeof row[j] === "number" ? row[j] : null;
-
-      if (projIndex !== -1) {
-        while (newRow.length <= projIndex) newRow.push(null);
-        newRow[projIndex] = val;
+    for (let j = 1; j < row.length; j++) {
+      const label = hist[0][j];
+      if (commonHeaders.includes(label)) {
+        dateMap.get(key).hist[label] = typeof row[j] === "number" ? row[j] : null;
       }
     }
-
-    combined.push(newRow);
   }
 
-  // Add future projection rows after latest historical
+  // Add projection rows
   for (let i = 1; i < proj.length; i++) {
-    const date = proj[i][0];
+    const row = proj[i];
+    const date = row[0];
     if (!(date instanceof Date)) continue;
-    if (!sinceDate || date > sinceDate) {
-      combined.push(proj[i]);
+
+    const key = +date;
+    if (!dateMap.has(key)) dateMap.set(key, { date, hist: {}, proj: {} });
+
+    for (let j = 1; j < row.length; j++) {
+      const label = proj[0][j];
+      if (commonHeaders.includes(label)) {
+        dateMap.get(key).proj[label] = typeof row[j] === "number" ? row[j] : null;
+      }
     }
   }
 
-  console.log("✅ mergeWithHistorical complete:", combined.length, "rows");
-  return combined;
+  // Final headers: Date, 1M Term SOFR (Hist), 1M Term SOFR (Proj), etc.
+  const mergedHeaders = ['Reset Date'];
+  commonHeaders.forEach(label => {
+    mergedHeaders.push(`${label} (Hist)`);
+    mergedHeaders.push(`${label} (Proj)`);
+  });
+
+  const mergedRows = [mergedHeaders];
+
+  const sortedDates = Array.from(dateMap.values()).sort((a, b) => a.date - b.date);
+
+  for (const entry of sortedDates) {
+    const row = [entry.date];
+    commonHeaders.forEach(label => {
+      row.push(entry.hist[label] ?? null);
+      row.push(entry.proj[label] ?? null);
+    });
+    mergedRows.push(row);
+  }
+
+  console.log("✅ mergeWithHistorical complete:", mergedRows.length, "rows");
+  return mergedRows;
 }
 
 function drawChart(startDate, endDate) {
   if (!transformedData || transformedData.length < 2) return;
 
-  // Ensure fallback dates
   if (!startDate || isNaN(startDate.getTime())) {
     startDate = transformedData[1]?.[0] instanceof Date ? transformedData[1][0] : new Date();
   }
@@ -369,12 +381,12 @@ function drawChart(startDate, endDate) {
   const highlightActuals = document.getElementById("actualsToggle")?.checked ?? false;
 
   const filteredIndexes = fullHeader
-  .map((label, i) => {
-    if (i === 0) return i;
-    const baseLabel = label.replace(" (Hist)", "").replace(" (Proj)", "");
-    return visibleCheckboxes.includes(baseLabel) ? i : -1;
-  })
-  .filter(i => i !== -1);
+    .map((label, i) => {
+      if (i === 0) return i;
+      const baseLabel = label.replace(" (Hist)", "").replace(" (Proj)", "");
+      return visibleCheckboxes.includes(baseLabel) ? i : -1;
+    })
+    .filter(i => i !== -1);
 
   if (filteredIndexes.length <= 1) {
     const chartDiv = document.getElementById("chart_div");
@@ -384,10 +396,8 @@ function drawChart(startDate, endDate) {
     return;
   }
 
-  // Apply column filter
   let dataArray = transformedData.map(row => filteredIndexes.map(i => row[i]));
 
-  // Smoothing if toggle is on
   const smoothingToggle = document.getElementById("smoothingToggle");
   if (smoothingToggle?.checked) {
     dataArray = smoothData(dataArray, 5);
@@ -445,32 +455,24 @@ function drawChart(startDate, endDate) {
       "FOMC DOT Plot": "#2e7d32"
     };
 
-    // Assign color per series based on whether it has only historical or mixed
     for (let i = 1; i < header.length; i++) {
-      const label = header[i];
-      let hasHistorical = false;
-      let hasProjection = false;
+      const label = header[i]; // e.g. "1M Term SOFR (Hist)" or "Prime (Proj)"
+      const isHist = label.includes(" (Hist)");
+      const isProj = label.includes(" (Proj)");
+      const baseLabel = label.replace(" (Hist)", "").replace(" (Proj)", "");
 
-      for (let j = 1; j < dataArray.length; j++) {
-        const rowDate = dataArray[j][0];
-        const value = dataArray[j][i];
-        if (value != null) {
-          if (rowDate < today) hasHistorical = true;
-          if (rowDate >= today) hasProjection = true;
-        }
-      }
+      let seriesColor = colorMap[baseLabel] || "#000000";
 
-      let seriesColor = colorMap[label.replace(" (Hist)", "").replace(" (Proj)", "")] || "#000000";
-
-
-      if (showHistorical && hasHistorical && !hasProjection) {
-        seriesColor = "#4caf50"; // historical only — green
-      } else if (highlightActuals && label.toLowerCase().includes("actual")) {
-        seriesColor = "#d32f2f"; // red for actuals toggle
+      if (highlightActuals && label.toLowerCase().includes("actual")) {
+        seriesColor = "#d32f2f"; // red for actual
+      } else if (showHistorical && isHist) {
+        seriesColor = "#4caf50"; // green for historical-only
       }
 
       options.series[i - 1] = {
-        color: seriesColor
+        color: seriesColor,
+        lineDashStyle: null, // you can use [4,2] for dashed projections if desired
+        lineWidth: 2
       };
     }
 
@@ -1233,7 +1235,7 @@ document.addEventListener("DOMContentLoaded", function () {
   if (historicalToggle) {
     historicalToggle.addEventListener("change", () => {
       console.log("🔁 Historical toggle changed. Reloading data...");
-      loadData(); // ← this is the fix
+      loadData(); 
     });
   }
 
