@@ -267,7 +267,6 @@ function processDataAndRedraw() {
   console.log("📦 cleanedHistorical", cleanedHistorical?.slice?.(0, 3));
 
   let merged = [];
-
   const shouldMerge = showHistorical && cleanedHistorical.length > 1;
 
   if (shouldMerge) {
@@ -283,74 +282,105 @@ function processDataAndRedraw() {
     return;
   }
 
+  // ✅ Final filter to honor sinceDate across the entire merged dataset
+  if (sinceDate instanceof Date && !isNaN(sinceDate.getTime())) {
+    const headerRow = merged[0];
+    merged = [headerRow, ...merged.slice(1).filter(row => {
+      const date = row[0];
+      return date instanceof Date && date >= sinceDate;
+    })];
+  }
+
   transformedData = merged;
+
+  // ✅ Now define currentStartDate and currentEndDate window
+  const earliestDate = transformedData[1]?.[0];
+  const latestDate = transformedData[transformedData.length - 1]?.[0];
+  const fallbackStart = new Date();
+  fallbackStart.setFullYear(fallbackStart.getFullYear() - 1);
+
+  const viewStart = earliestDate instanceof Date ? earliestDate : fallbackStart;
+  const viewEnd = new Date(viewStart);
+  viewEnd.setFullYear(viewEnd.getFullYear() + (document.getElementById("5Y")?.checked ? 5 : 10));
+
+  window.currentStartDate = viewStart;
+  window.currentEndDate = viewEnd;
+
   console.log("🧪 FINAL transformedData HEADERS:", transformedData[0]);
-  drawChart(window.currentStartDate, window.currentEndDate);
+  drawChart(viewStart, viewEnd);
 }
 
 function mergeWithHistorical(proj, hist, sinceDate) {
   if (!Array.isArray(proj) || proj.length < 2 || !Array.isArray(hist) || hist.length < 2) {
-    console.error("❌ mergeWithHistorical: Missing or empty data arrays.");
+    console.error("❌ mergeWithHistorical: Missing or invalid data.");
     return proj;
   }
 
-  const projHeaders = proj[0].slice(1); // drop "Reset Date"
-  const histHeaders = hist[0].slice(1); // drop "Reset Date"
-  const commonHeaders = projHeaders.filter(label => histHeaders.includes(label));
+  const dateCol = 0;
+  const projHeaders = proj[0].slice(1); // skip Reset Date
+  const histHeaders = hist[0].slice(1);
 
-  const dateMap = new Map();
+  // Get all unique headers that appear in either dataset
+  const allHeadersSet = new Set([...projHeaders, ...histHeaders]);
+  const allHeaders = Array.from(allHeadersSet).filter(h => h !== "Reset Date");
 
-  // Add historical rows
+  const mergedHeaders = ["Reset Date"];
+  allHeaders.forEach(label => {
+    if (histHeaders.includes(label)) mergedHeaders.push(`${label} (Hist)`);
+    if (projHeaders.includes(label)) mergedHeaders.push(`${label} (Proj)`);
+  });
+
+  const rowMap = new Map();
+
+  // First: process historical rows
   for (let i = 1; i < hist.length; i++) {
     const row = hist[i];
-    const date = row[0];
+    const date = row[dateCol];
     if (!(date instanceof Date)) continue;
     if (sinceDate && date < sinceDate) continue;
 
     const key = +date;
-    if (!dateMap.has(key)) dateMap.set(key, { date, hist: {}, proj: {} });
+    if (!rowMap.has(key)) {
+      rowMap.set(key, { date, hist: {}, proj: {} });
+    }
 
     for (let j = 1; j < row.length; j++) {
       const label = hist[0][j];
-      if (commonHeaders.includes(label)) {
-        dateMap.get(key).hist[label] = typeof row[j] === "number" ? row[j] : null;
-      }
+      rowMap.get(key).hist[label] = typeof row[j] === "number" ? row[j] : null;
     }
   }
 
-  // Add projection rows
+  // Then: process projection rows
   for (let i = 1; i < proj.length; i++) {
     const row = proj[i];
-    const date = row[0];
+    const date = row[dateCol];
     if (!(date instanceof Date)) continue;
 
     const key = +date;
-    if (!dateMap.has(key)) dateMap.set(key, { date, hist: {}, proj: {} });
+    if (!rowMap.has(key)) {
+      rowMap.set(key, { date, hist: {}, proj: {} });
+    }
 
     for (let j = 1; j < row.length; j++) {
       const label = proj[0][j];
-      if (commonHeaders.includes(label)) {
-        dateMap.get(key).proj[label] = typeof row[j] === "number" ? row[j] : null;
-      }
+      rowMap.get(key).proj[label] = typeof row[j] === "number" ? row[j] : null;
     }
   }
 
-  // Final headers: Date, 1M Term SOFR (Hist), 1M Term SOFR (Proj), etc.
-  const mergedHeaders = ['Reset Date'];
-  commonHeaders.forEach(label => {
-    mergedHeaders.push(`${label} (Hist)`);
-    mergedHeaders.push(`${label} (Proj)`);
-  });
+  // Sort all dates
+  const sortedDates = Array.from(rowMap.values()).sort((a, b) => a.date - b.date);
 
   const mergedRows = [mergedHeaders];
 
-  const sortedDates = Array.from(dateMap.values()).sort((a, b) => a.date - b.date);
-
   for (const entry of sortedDates) {
     const row = [entry.date];
-    commonHeaders.forEach(label => {
-      row.push(entry.hist[label] ?? null);
-      row.push(entry.proj[label] ?? null);
+    allHeaders.forEach(label => {
+      if (histHeaders.includes(label)) {
+        row.push(entry.hist[label] ?? null);
+      }
+      if (projHeaders.includes(label)) {
+        row.push(entry.proj[label] ?? null);
+      }
     });
     mergedRows.push(row);
   }
@@ -362,14 +392,14 @@ function mergeWithHistorical(proj, hist, sinceDate) {
 function drawChart(startDate, endDate) {
   if (!transformedData || transformedData.length < 2) return;
 
-  // Determine earliest and latest date in data to set full range for x-axis ticks
-  const allDates = transformedData.slice(1).map(row => row[0]).filter(d => d instanceof Date);
-  const minDate = new Date(Math.min(...allDates.map(d => d.getTime())));
-  const maxDate = new Date(Math.max(...allDates.map(d => d.getTime())));
-
-  // Ensure fallback dates using full range
-  if (!startDate || isNaN(startDate.getTime())) startDate = minDate;
-  if (!endDate || isNaN(endDate.getTime())) endDate = maxDate;
+  // Ensure fallback dates
+  if (!startDate || isNaN(startDate.getTime())) {
+    startDate = transformedData[1]?.[0] instanceof Date ? transformedData[1][0] : new Date();
+  }
+  if (!endDate || isNaN(endDate.getTime())) {
+    const lastRow = transformedData[transformedData.length - 1];
+    endDate = lastRow?.[0] instanceof Date ? lastRow[0] : new Date();
+  }
 
   window.currentStartDate = startDate;
   window.currentEndDate = endDate;
@@ -429,9 +459,166 @@ function drawChart(startDate, endDate) {
         isHtml: false
       },
       hAxis: {
+        title: 'Date',
         format: 'yyyy',
         slantedText: false,
-        ticks: generateYearlyTicks(minDate, maxDate),
+        ticks: generateYearlyTicks(startDate, endDate),
+        viewWindow: {
+          min: startDate,
+          max: endDate
+        },
+        textStyle: { fontSize: 12 },
+        gridlines: { color: 'transparent' }
+      },
+      vAxis: {
+        format: '#.##%',
+        textStyle: { fontSize: 12 },
+        gridlines: { color: '#e0e0e0' },
+        baselineColor: '#333',
+        baseline: 0,
+        textPosition: 'out',
+        minorGridlines: { color: 'transparent' }
+      },
+      series: {}
+    };
+
+    const colorMap = {
+      "1M Term SOFR": "#1976d2",
+      "3M Term SOFR": "#388e3c",
+      "30D Average SOFR (NYFED)": "#f57c00",
+      "Overnight SOFR": "#6a1b9a",
+      "Simple Average SOFR": "#00838f",
+      "1M ISDA SOFR": "#5d4037",
+      "Prime": "#e65100",
+      "FOMC DOT Plot": "#2e7d32"
+    };
+
+    // Assign color per series based on historical/actuals logic
+    for (let i = 1; i < header.length; i++) {
+      const label = header[i];
+      const baseLabel = label.replace(" (Hist)", "").replace(" (Proj)", "");
+
+      let hasHistorical = false;
+      let hasProjection = false;
+
+      for (let j = 1; j < dataArray.length; j++) {
+        const rowDate = dataArray[j][0];
+        const value = dataArray[j][i];
+        if (value != null) {
+          if (rowDate < today) hasHistorical = true;
+          if (rowDate >= today) hasProjection = true;
+        }
+      }
+
+      let seriesColor = colorMap[baseLabel] || "#000000";
+
+      // ✅ Historical-only detection by date, not label
+      let isHistoricalOnly = false;
+      if (showHistorical) {
+        isHistoricalOnly = dataArray.every((row, rowIdx) => {
+          if (rowIdx === 0) return true;
+          const rowDate = row[0];
+          const value = row[i];
+          return value == null || rowDate < today;
+        });
+      }
+
+      if (isHistoricalOnly) {
+        seriesColor = "#4caf50"; // ✅ solid green for historical-only
+      } else if (highlightActuals && label.toLowerCase().includes("actual")) {
+        seriesColor = "#d32f2f"; // red for actuals
+      }
+
+      options.series[i - 1] = {
+        color: seriesColor
+      };
+    }
+
+    const chart = new google.visualization.LineChart(document.getElementById("chart_div"));
+    chart.draw(data, options);
+
+    renderForwardCurveTable(startDate, endDate, viewMode);
+  } catch (err) {
+    const chartDiv = document.getElementById("chart_div");
+    if (chartDiv) {
+      chartDiv.innerHTML = `<p style='color:red;'>Chart failed to render: ${err.message}</p>`;
+    }
+  }
+}
+
+function drawChart(startDate, endDate) {
+  if (!transformedData || transformedData.length < 2) return;
+
+  // Ensure fallback dates
+  if (!startDate || isNaN(startDate.getTime())) {
+    startDate = transformedData[1]?.[0] instanceof Date ? transformedData[1][0] : new Date();
+  }
+  if (!endDate || isNaN(endDate.getTime())) {
+    const lastRow = transformedData[transformedData.length - 1];
+    endDate = lastRow?.[0] instanceof Date ? lastRow[0] : new Date();
+  }
+
+  window.currentStartDate = startDate;
+  window.currentEndDate = endDate;
+
+  const fullHeader = transformedData[0];
+  const showHistorical = document.getElementById("historicalToggle")?.checked ?? false;
+  const highlightActuals = document.getElementById("actualsToggle")?.checked ?? false;
+
+  const filteredIndexes = fullHeader
+    .map((label, i) => {
+      if (i === 0) return i;
+      const baseLabel = label.replace(" (Hist)", "").replace(" (Proj)", "");
+      return visibleCheckboxes.includes(baseLabel) ? i : -1;
+    })
+    .filter(i => i !== -1);
+
+  if (filteredIndexes.length <= 1) {
+    const chartDiv = document.getElementById("chart_div");
+    if (chartDiv) {
+      chartDiv.innerHTML = "<p style='color:red;'>Please select at least one data series to display the chart.</p>";
+    }
+    return;
+  }
+
+  let dataArray = transformedData.map(row => filteredIndexes.map(i => row[i]));
+
+  const smoothingToggle = document.getElementById("smoothingToggle");
+  if (smoothingToggle?.checked) {
+    dataArray = smoothData(dataArray, 5);
+  }
+
+  try {
+    const data = google.visualization.arrayToDataTable(dataArray);
+    const header = dataArray[0];
+
+    const options = {
+      title: '',
+      height: 500,
+      curveType: 'function',
+      legend: { position: 'none' },
+      chartArea: { width: '85%', height: '70%' },
+      lineWidth: 2,
+      focusTarget: 'category',
+      tooltip: {
+        trigger: 'both',
+        textStyle: {
+          fontName: 'Kanit',
+          fontSize: 12,
+          color: '#333'
+        },
+        showColorCode: true,
+        isHtml: false
+      },
+      hAxis: {
+        title: 'Date',
+        format: 'yyyy',
+        slantedText: false,
+        ticks: generateYearlyTicks(startDate, endDate),
+        viewWindow: {
+          min: startDate,
+          max: endDate
+        },
         textStyle: { fontSize: 12 },
         gridlines: { color: 'transparent' }
       },
@@ -460,25 +647,19 @@ function drawChart(startDate, endDate) {
 
     for (let i = 1; i < header.length; i++) {
       const label = header[i];
-      let hasHistorical = false;
-      let hasProjection = false;
+      const isHist = label.endsWith("(Hist)");
+      const isProj = label.endsWith("(Proj)");
+      const baseLabel = label.replace(" (Hist)", "").replace(" (Proj)", "");
 
-      for (let j = 1; j < dataArray.length; j++) {
-        const rowDate = dataArray[j][0];
-        const value = dataArray[j][i];
-        if (value != null) {
-          if (rowDate < today) hasHistorical = true;
-          if (rowDate >= today) hasProjection = true;
-        }
-      }
+      let seriesColor = colorMap[baseLabel] || "#000000";
 
-      let seriesColor = colorMap[label.replace(" (Hist)", "").replace(" (Proj)", "")] || "#000000";
-
-      if (showHistorical && hasHistorical && !hasProjection) {
-        seriesColor = "#4caf50"; // green for historical only
-      } else if (highlightActuals && label.toLowerCase().includes("actual")) {
+      if (showHistorical && isHist) {
+        seriesColor = "#4caf50"; // solid green for historical only
+      } else if (highlightActuals && baseLabel.toLowerCase().includes("actual")) {
         seriesColor = "#d32f2f"; // red for actuals
       }
+
+      console.log(`🎨 Label: ${label}, base: ${baseLabel}, isHist: ${isHist}, isProj: ${isProj}, color: ${seriesColor}`);
 
       options.series[i - 1] = {
         color: seriesColor
