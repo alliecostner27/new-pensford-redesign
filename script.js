@@ -260,53 +260,40 @@ function processDataAndRedraw() {
   console.log("📌 showHistorical toggle?", showHistorical);
   console.log("📅 sinceDate input:", sinceDateStr, "| parsed:", sinceDate);
 
-  let cleanedProjection = Array.isArray(fullProjectionData) ? fullProjectionData : [];
-  let cleanedHistorical = Array.isArray(fullHistoricalData) ? fullHistoricalData : [];
-
-  console.log("📦 cleanedProjection", cleanedProjection?.slice?.(0, 3));
-  console.log("📦 cleanedHistorical", cleanedHistorical?.slice?.(0, 3));
+  const cleanedProjection = Array.isArray(fullProjectionData) ? fullProjectionData : [];
+  const cleanedHistorical = Array.isArray(fullHistoricalData) ? fullHistoricalData : [];
 
   let merged = [];
-  const shouldMerge = showHistorical && cleanedHistorical.length > 1;
 
-  if (shouldMerge) {
-    console.log("✅ Running mergeWithHistorical");
+  if (showHistorical && cleanedHistorical.length > 1) {
+    console.log("✅ Running mergeWithHistorical with sinceDate:", sinceDate);
     merged = mergeWithHistorical(cleanedProjection, cleanedHistorical, sinceDate);
   } else {
-    console.log("❌ mergeWithHistorical skipped: using projection-only fallback");
+    console.log("❌ Skipping historical merge. Using projections only.");
     merged = cleanedProjection;
   }
 
+  // ❗ Safeguard against invalid results
   if (!merged || merged.length < 2) {
-    console.error("❌ No data to render after processing.");
+    console.error("❌ No data to draw after merging.");
     return;
-  }
-
-  // ✅ Final filter to honor sinceDate across the entire merged dataset
-  if (sinceDate instanceof Date && !isNaN(sinceDate.getTime())) {
-    const headerRow = merged[0];
-    merged = [headerRow, ...merged.slice(1).filter(row => {
-      const date = row[0];
-      return date instanceof Date && date >= sinceDate;
-    })];
   }
 
   transformedData = merged;
 
-  // ✅ Now define currentStartDate and currentEndDate window
-  const earliestDate = transformedData[1]?.[0];
-  const latestDate = transformedData[transformedData.length - 1]?.[0];
-  const fallbackStart = new Date();
-  fallbackStart.setFullYear(fallbackStart.getFullYear() - 1);
+  // 🧠 Compute visible chart window
+  const dataStart = merged[1]?.[0];
+  const defaultStart = new Date();
+  defaultStart.setFullYear(defaultStart.getFullYear() - 1);
 
-  const viewStart = earliestDate instanceof Date ? earliestDate : fallbackStart;
+  const viewStart = dataStart instanceof Date ? dataStart : defaultStart;
   const viewEnd = new Date(viewStart);
   viewEnd.setFullYear(viewEnd.getFullYear() + (document.getElementById("5Y")?.checked ? 5 : 10));
 
   window.currentStartDate = viewStart;
   window.currentEndDate = viewEnd;
 
-  console.log("🧪 FINAL transformedData HEADERS:", transformedData[0]);
+  console.log("📈 Drawing chart with data range:", viewStart.toISOString(), "to", viewEnd.toISOString());
   drawChart(viewStart, viewEnd);
 }
 
@@ -322,15 +309,23 @@ function mergeWithHistorical(proj, hist, sinceDate) {
 
   const dateMap = new Map();
 
-  // Add historical rows
+  // ✅ 1. Filtered Historical Rows
   for (let i = 1; i < hist.length; i++) {
     const row = hist[i];
     const date = row[0];
-    if (!(date instanceof Date)) continue;
-    if (sinceDate && date < sinceDate) continue;
+
+    // Ensure it's a valid Date
+    if (!(date instanceof Date) || isNaN(date)) continue;
+
+    // ✅ Skip if before sinceDate
+    if (sinceDate instanceof Date && !isNaN(sinceDate) && date < sinceDate) {
+      continue;
+    }
 
     const key = +date;
-    if (!dateMap.has(key)) dateMap.set(key, { date, hist: {}, proj: {} });
+    if (!dateMap.has(key)) {
+      dateMap.set(key, { date, hist: {}, proj: {} });
+    }
 
     for (let j = 1; j < row.length; j++) {
       const label = hist[0][j];
@@ -341,14 +336,16 @@ function mergeWithHistorical(proj, hist, sinceDate) {
     }
   }
 
-  // Add projection rows
+  // 2. Projection Rows (no sinceDate filter)
   for (let i = 1; i < proj.length; i++) {
     const row = proj[i];
     const date = row[0];
-    if (!(date instanceof Date)) continue;
+    if (!(date instanceof Date) || isNaN(date)) continue;
 
     const key = +date;
-    if (!dateMap.has(key)) dateMap.set(key, { date, hist: {}, proj: {} });
+    if (!dateMap.has(key)) {
+      dateMap.set(key, { date, hist: {}, proj: {} });
+    }
 
     for (let j = 1; j < row.length; j++) {
       const label = proj[0][j];
@@ -359,7 +356,7 @@ function mergeWithHistorical(proj, hist, sinceDate) {
     }
   }
 
-  // Final headers: Date, 1M Term SOFR (Hist), 1M Term SOFR (Proj), ...
+  // 3. Construct Final Output
   const mergedHeaders = ['Reset Date'];
   commonHeaders.forEach(label => {
     mergedHeaders.push(`${label} (Hist)`);
@@ -369,7 +366,6 @@ function mergeWithHistorical(proj, hist, sinceDate) {
   const mergedRows = [mergedHeaders];
 
   const sortedDates = Array.from(dateMap.values()).sort((a, b) => a.date - b.date);
-
   for (const entry of sortedDates) {
     const row = [entry.date];
     commonHeaders.forEach(label => {
@@ -571,7 +567,7 @@ function drawChart(startDate, endDate) {
   }
 }
 
-function renderForwardCurveTable(startDateInput, endDateInput, mode = 'daily') {
+function renderForwardCurveTable(_startDateInput, _endDateInput, mode = 'daily') {
   if (!transformedData || transformedData.length < 2) {
     console.warn("No transformed data available.");
     return;
@@ -581,10 +577,10 @@ function renderForwardCurveTable(startDateInput, endDateInput, mode = 'daily') {
   if (!container) return;
 
   // Parse safe fallback dates
-  const parseDate = val => {
-    const d = new Date(val);
-    return isNaN(d.getTime()) ? null : d;
-  };
+  // const parseDate = val => {
+  //   const d = new Date(val);
+  //   return isNaN(d.getTime()) ? null : d;
+  // };
 
   const startDate = window.currentStartDate || new Date(2019, 0, 1);
   const endDate = window.currentEndDate || new Date(2025, 11, 31);
@@ -654,7 +650,7 @@ function renderForwardCurveTable(startDateInput, endDateInput, mode = 'daily') {
 
   // Copy buttons under headers (skip Reset Date column)
   const copyRow = document.createElement("tr");
-  colIndexes.forEach((i, colIdx) => {
+  colIndexes.forEach((i) => {
     const thLabel = typeof fullHeader[i] === "object" ? fullHeader[i].label : fullHeader[i];
     const td = document.createElement("td");
     if (thLabel === "Reset Date") {
@@ -1149,7 +1145,8 @@ document.addEventListener("DOMContentLoaded", () => {
   if (el) el.addEventListener("change", debounceRedraw);
   });
 
-    // Show modal
+
+    // Show moda
 document.getElementById("sharePageButton").addEventListener("click", () => {
   document.getElementById("emailModal").style.display = "flex";
 });
