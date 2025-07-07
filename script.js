@@ -22,165 +22,328 @@ function debounceRedraw() {
   }, 250); 
 }
 
-function transformData(rawData) {
-  if (!rawData || rawData.length < 2) {
-    console.warn("No raw data available for transformation.");
-    return [];
-  }
+function smoothData(dataArray, windowSize = 5) {
+  if (dataArray.length < 2) return dataArray;
 
-  const header = rawData[0];
-  const resetDateIndex = header.indexOf("Reset Date");
+  const header = dataArray[0];
+  const smoothed = [header];
 
-  if (resetDateIndex === -1) {
-    console.error("'Reset Date' column missing.");
-    return [];
-  }
+  for (let i = windowSize; i < dataArray.length; i++) {
+    const window = dataArray.slice(i - windowSize, i);
+    const avgRow = [window[window.length - 1][0]]; 
 
-  const cleaned = [header];
+    for (let col = 1; col < header.length; col++) {
+      let sum = 0;
+      let count = 0;
 
-  for (let i = 1; i < rawData.length; i++) {
-    const row = rawData[i];
-    const newRow = [];
-
-    for (let j = 0; j < row.length; j++) {
-      if (j === resetDateIndex) {
-        const raw = row[j];
-        const date = new Date(raw); 
-        if (isNaN(date.getTime())) {
-          console.warn(`Invalid date at row ${i}:`, raw);
-          break; 
+      for (let j = 0; j < window.length; j++) {
+        const val = parseFloat(window[j][col]);
+        if (!isNaN(val)) {
+          sum += val;
+          count++;
         }
-        newRow.push(date);
-      } else {
-        const val = parseFloat(row[j]);
-        newRow.push(isNaN(val) ? null : val);
       }
+
+      avgRow.push(count ? sum / count : null);
     }
 
-    if (newRow.length === header.length) {
-      cleaned.push(newRow);
-    }
+    smoothed.push(avgRow);
   }
 
-  console.log("transformData() rows returned:", cleaned.length);
-  return cleaned;
+  return smoothed;
+}
+
+function generateYearlyTicks(startDate, endDate) {
+  if (!startDate || !endDate || !(startDate instanceof Date) || !(endDate instanceof Date)) {
+    console.warn("Invalid start or end date passed to generateYearlyTicks");
+    return [];
+  }
+
+  const ticks = [];
+  const startYear = startDate.getFullYear();
+  const endYear = endDate.getFullYear();
+
+  for (let year = startYear; year <= endYear; year++) {
+    ticks.push(new Date(year, 0, 1));
+  }
+
+  return ticks;
+}
+
+function getDateFromInputs(prefix) {
+  const day = document.getElementById(`${prefix}Day`)?.value;
+  const month = document.getElementById(`${prefix}Month`)?.value;
+  const year = document.getElementById(`${prefix}Year`)?.value;
+
+  if (!day || !month || !year) return null;
+
+  const monthNames = {
+    January: 0,
+    February: 1,
+    March: 2,
+    April: 3,
+    May: 4,
+    June: 5,
+    July: 6,
+    August: 7,
+    September: 8,
+    October: 9,
+    November: 10,
+    December: 11
+  };
+
+  const monthIndex = monthNames[month];
+  if (monthIndex === undefined) return null;
+
+  const parsedDay = parseInt(day, 10);
+  const parsedYear = parseInt(year, 10);
+
+  if (isNaN(parsedDay) || isNaN(parsedYear)) return null;
+
+  return new Date(parsedYear, monthIndex, parsedDay);
 }
 
 function loadData() {
-  const showHistorical = document.getElementById("historicalToggle")?.checked ?? false;
+  const dataURL = "https://script.google.com/macros/s/AKfycbzhcymTfhNgFb_RJLSOYvtTihmh8lgdzr3sD4HuHYPaJ5L5lGKhMUsmdLyhnPar9ij5bw/exec";
 
-  if (showHistorical) {
-    // Load both sheets in parallel
-    const historicalURL = "https://script.google.com/macros/s/AKfycbzhcymTfhNgFb_RJLSOYvtTihmh8lgdzr3sD4HuHYPaJ5L5lGKhMUsmdLyhnPar9ij5bw/exec?sheet=Historical/Real";
-    const projectionURL = "https://script.google.com/macros/s/AKfycbzhcymTfhNgFb_RJLSOYvtTihmh8lgdzr3sD4HuHYPaJ5L5lGKhMUsmdLyhnPar9ij5bw/exec?sheet=Market Expectations";
+  fetch(dataURL)
+    .then(res => res.json())
+    .then(response => {
+      const rawProjection = response.projection;
+      const rawHistorical = response.historical;
 
-    Promise.all([
-      fetch(historicalURL).then(res => res.json()),
-      fetch(projectionURL).then(res => res.json())
-    ])
-    .then(([historical, projection]) => {
-      if (!historical || !projection || historical.length < 2 || projection.length < 2) {
-        console.error("Missing or insufficient data in one of the sources.");
+      console.log("📦 rawProjectionData preview:", rawProjection?.slice?.(0, 3));
+      console.log("📦 rawHistoricalData preview:", rawHistorical?.slice?.(0, 3));
+
+      if (!Array.isArray(rawProjection)) {
+        console.error("❌ 'projection' is not a valid array:", rawProjection);
         return;
       }
 
-      fullHistoricalData = transformData(historical);
-      fullProjectionData = transformData(projection);
-      headers = fullProjectionData[0]; 
+      fullProjectionData = transformData(rawProjection);
+      headers = fullProjectionData[0];
+
+      const showHistorical = document.getElementById("historicalToggle")?.checked ?? false;
+
+      if (showHistorical) {
+        if (!Array.isArray(rawHistorical)) {
+          console.error("❌ 'historical' is not a valid array:", rawHistorical);
+          return;
+        }
+
+        fullHistoricalData = transformData(rawHistorical); // ✅ required line
+        console.log("✅ fullHistoricalData rows:", fullHistoricalData?.length);
+      } else {
+        fullHistoricalData = null;
+      }
 
       processDataAndRedraw();
     })
     .catch(error => {
-      console.error("Error loading both sheets:", error);
+      console.error("❌ Error fetching data from Apps Script:", error);
     });
+}
 
-  } else {
-    // Load only projection
-    const url = "https://script.google.com/macros/s/AKfycbzhcymTfhNgFb_RJLSOYvtTihmh8lgdzr3sD4HuHYPaJ5L5lGKhMUsmdLyhnPar9ij5bw/exec?sheet=Market Expectations";
-
-    fetch(url)
-      .then(res => res.json())
-      .then(data => {
-        if (!data || data.length < 2) {
-          console.error("Projection sheet is empty or invalid.");
-          return;
-        }
-
-        fullProjectionData = transformData(data);
-        headers = fullProjectionData[0];
-        fullHistoricalData = null; // Clear if previously loaded
-
-        processDataAndRedraw();
-      })
-      .catch(error => {
-        console.error("Error loading projection sheet:", error);
-      });
+function transformData(rawData) {
+  if (!rawData || rawData.length < 2 || !Array.isArray(rawData)) {
+    console.warn("⚠️ transformData(): No raw data available for transformation.");
+    return [];
   }
+
+  // Trim and normalize headers
+  const headerRow = rawData[0].map(cell =>
+    typeof cell === "string" ? cell.trim() : cell
+  );
+  console.log("🧪 Raw HEADER:", headerRow);
+
+  const dateColIndex = headerRow.findIndex(h => h === "Reset Date");
+  console.log("🔎 Found 'Reset Date' at index:", dateColIndex);
+
+  if (dateColIndex === -1) {
+    console.error("❌ transformData(): 'Reset Date' column not found.");
+    return [];
+  }
+
+  // Start building transformed data
+  const transformed = [headerRow];
+  let validRowCount = 0;
+
+  for (let i = 1; i < rawData.length; i++) {
+    const row = rawData[i];
+    const dateValue = row[dateColIndex];
+
+    if (!dateValue || isNaN(new Date(dateValue))) {
+      continue; // Skip if no valid date
+    }
+
+    const parsedDate = new Date(dateValue);
+    const transformedRow = [...row];
+    transformedRow[dateColIndex] = parsedDate;
+
+    // Log samples if needed
+    if (i >= 100 && i < 125) {
+      console.log(
+        `🧪 Row ${i} raw date value:`,
+        dateValue,
+        "| type:",
+        typeof dateValue
+      );
+    }
+
+    transformed.push(transformedRow);
+    validRowCount++;
+  }
+
+  console.log(`✅ transformData() rows returned: ${validRowCount}`);
+  return transformed;
+}
+
+function transformData(rawData) {
+  if (!rawData || rawData.length < 2 || !Array.isArray(rawData)) {
+    console.warn("⚠️ transformData(): No raw data available for transformation.");
+    return [];
+  }
+
+  const headerRow = rawData[0].map(cell =>
+    typeof cell === "string" ? cell.trim() : cell
+  );
+  console.log("🧪 Raw HEADER:", headerRow);
+
+  const dateColIndex = headerRow.findIndex(h => h === "Reset Date");
+  console.log("🔎 Found 'Reset Date' at index:", dateColIndex);
+
+  if (dateColIndex === -1) {
+    console.error("❌ transformData(): 'Reset Date' column not found.");
+    return [];
+  }
+
+  const transformed = [headerRow];
+  let validRowCount = 0;
+
+  for (let i = 1; i < rawData.length; i++) {
+    const row = rawData[i];
+    const dateValue = row[dateColIndex];
+
+    if (!dateValue || isNaN(new Date(dateValue))) continue;
+
+    const parsedDate = new Date(dateValue);
+    const transformedRow = [...row];
+    transformedRow[dateColIndex] = parsedDate;
+
+    if (i >= 100 && i < 125) {
+      console.log(
+        `🧪 Row ${i} raw date value:`,
+        dateValue,
+        "| type:",
+        typeof dateValue
+      );
+    }
+
+    transformed.push(transformedRow);
+    validRowCount++;
+  }
+
+  if (validRowCount === 0) {
+    console.warn("⚠️ transformData(): No valid rows after date parsing.");
+    return [];
+  }
+
+  console.log(`✅ transformData() rows returned: ${validRowCount}`);
+  return transformed;
 }
 
 function processDataAndRedraw() {
   const showHistorical = document.getElementById("historicalToggle")?.checked ?? false;
-
-  const dateIndex = headers.indexOf("Reset Date");
-  if (dateIndex === -1) {
-    console.error("'Reset Date' column missing");
-    return;
-  }
-
-  const sinceDateStr = document.getElementById("sinceDate")?.value;
+  const sinceDateStr = document.getElementById("sinceDateInput")?.value;
   const sinceDate = sinceDateStr ? new Date(sinceDateStr) : null;
 
-  if (!sinceDate || isNaN(sinceDate.getTime())) {
-    console.warn("Invalid or missing 'since' date input");
-    return;
-  }
+  console.log("📌 showHistorical toggle?", showHistorical);
+  console.log("📅 sinceDate input:", sinceDateStr, "| parsed:", sinceDate);
 
-  // Set today and 10-year forward limit
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  let cleanedProjection = Array.isArray(fullProjectionData) ? fullProjectionData : [];
+  let cleanedHistorical = Array.isArray(fullHistoricalData) ? fullHistoricalData : [];
 
-  const endDate = new Date(sinceDate);
-  endDate.setFullYear(endDate.getFullYear() + 10);
+  console.log("📦 cleanedProjection", cleanedProjection?.slice?.(0, 3));
+  console.log("📦 cleanedHistorical", cleanedHistorical?.slice?.(0, 3));
 
-  const yesterday = new Date(today);
-  yesterday.setDate(today.getDate() - 1);
+  let merged = [];
 
-  let chartData = [];
+  const shouldMerge = showHistorical && cleanedHistorical.length > 1;
 
-  if (showHistorical && fullHistoricalData && fullProjectionData) {
-    const histRows = fullHistoricalData.slice(1).filter(row => {
-      const d = new Date(row[dateIndex]);
-      return d >= sinceDate && d <= yesterday;
-    });
-
-    const projRows = fullProjectionData.slice(1).filter(row => {
-      const d = new Date(row[dateIndex]);
-      return d >= today && d <= endDate;
-    });
-
-    chartData = [headers, ...histRows, ...projRows];
-  } else if (fullProjectionData) {
-    const projRows = fullProjectionData.slice(1).filter(row => {
-      const d = new Date(row[dateIndex]);
-      return d >= sinceDate && d <= endDate;
-    });
-
-    chartData = [headers, ...projRows];
+  if (shouldMerge) {
+    console.log("✅ Running mergeWithHistorical");
+    merged = mergeWithHistorical(cleanedProjection, cleanedHistorical, sinceDate);
   } else {
-    console.error("No projection data available");
+    console.log("❌ mergeWithHistorical skipped: using projection-only fallback");
+    merged = cleanedProjection;
+  }
+
+  if (!merged || merged.length < 2) {
+    console.error("❌ No data to render after processing.");
     return;
   }
 
-  transformedData = chartData;
+  transformedData = merged;
+  console.log("🧪 FINAL transformedData HEADERS:", transformedData[0]);
+  drawChart(window.currentStartDate, window.currentEndDate);
+}
 
-  console.log("Chart Data Range", {
-    sinceDate,
-    endDate,
-    totalRows: chartData.length,
-    preview: chartData.slice(0, 5)
-  });
+function mergeWithHistorical(proj, hist, sinceDate) {
+  if (!Array.isArray(proj) || proj.length < 2 || !Array.isArray(hist) || hist.length < 2) {
+    console.error("❌ mergeWithHistorical: Missing or empty data arrays.");
+    return proj;
+  }
 
-  drawChart(sinceDate, endDate);
+  const projHeaders = proj[0];
+  const histHeaders = hist[0];
+
+  const mergedHeaders = projHeaders;
+
+  // Build a map of date → values from projection
+  const projMap = new Map();
+  for (let i = 1; i < proj.length; i++) {
+    const row = proj[i];
+    if (row[0] instanceof Date) {
+      projMap.set(+row[0], row);
+    }
+  }
+
+  const combined = [mergedHeaders];
+
+  for (let i = 1; i < hist.length; i++) {
+    const row = hist[i];
+    const date = row[0];
+
+    if (!(date instanceof Date)) continue;
+    if (sinceDate && date < sinceDate) continue;
+
+    const newRow = [date];
+
+    for (let j = 1; j < histHeaders.length; j++) {
+      const label = histHeaders[j];
+      const projIndex = projHeaders.indexOf(label);
+      const val = typeof row[j] === "number" ? row[j] : null;
+
+      if (projIndex !== -1) {
+        while (newRow.length <= projIndex) newRow.push(null);
+        newRow[projIndex] = val;
+      }
+    }
+
+    combined.push(newRow);
+  }
+
+  // Add future projection rows after latest historical
+  for (let i = 1; i < proj.length; i++) {
+    const date = proj[i][0];
+    if (!(date instanceof Date)) continue;
+    if (!sinceDate || date > sinceDate) {
+      combined.push(proj[i]);
+    }
+  }
+
+  console.log("✅ mergeWithHistorical complete:", combined.length, "rows");
+  return combined;
 }
 
 function drawChart(startDate, endDate) {
@@ -206,8 +369,12 @@ function drawChart(startDate, endDate) {
   const highlightActuals = document.getElementById("actualsToggle")?.checked ?? false;
 
   const filteredIndexes = fullHeader
-    .map((label, i) => (i === 0 || visibleCheckboxes.includes(label)) ? i : -1)
-    .filter(i => i !== -1);
+  .map((label, i) => {
+    if (i === 0) return i;
+    const baseLabel = label.replace(" (Hist)", "").replace(" (Proj)", "");
+    return visibleCheckboxes.includes(baseLabel) ? i : -1;
+  })
+  .filter(i => i !== -1);
 
   if (filteredIndexes.length <= 1) {
     const chartDiv = document.getElementById("chart_div");
@@ -293,7 +460,8 @@ function drawChart(startDate, endDate) {
         }
       }
 
-      let seriesColor = colorMap[label] || "#000000";
+      let seriesColor = colorMap[label.replace(" (Hist)", "").replace(" (Proj)", "")] || "#000000";
+
 
       if (showHistorical && hasHistorical && !hasProjection) {
         seriesColor = "#4caf50"; // historical only — green
@@ -316,6 +484,182 @@ function drawChart(startDate, endDate) {
       chartDiv.innerHTML = `<p style='color:red;'>Chart failed to render: ${err.message}</p>`;
     }
   }
+}
+
+function renderForwardCurveTable(startDateInput, endDateInput, mode = 'daily') {
+  if (!transformedData || transformedData.length < 2) {
+    console.warn("No transformed data available.");
+    return;
+  }
+
+  const container = document.getElementById("forwardCurveTableContainer");
+  if (!container) return;
+
+  // Parse safe fallback dates
+  const parseDate = val => {
+    const d = new Date(val);
+    return isNaN(d.getTime()) ? null : d;
+  };
+
+  const startDate = window.currentStartDate || new Date(2019, 0, 1);
+  const endDate = window.currentEndDate || new Date(2025, 11, 31);
+
+  const fullHeader = transformedData[0];
+  const dateIndex = 0;
+
+  // Determine which columns to include
+  const colIndexes = fullHeader.map((label, i) => {
+    if (i === 0 || visibleCheckboxes.includes(label)) return i;
+    return -1;
+  }).filter(i => i !== -1);
+
+  // Filter rows in range
+  const filteredRows = transformedData.slice(1).filter(row => {
+    const rowDate = new Date(row[dateIndex]).setHours(0, 0, 0, 0);
+    const start = new Date(startDate).setHours(0, 0, 0, 0);
+    const end = new Date(endDate).setHours(0, 0, 0, 0);
+    return rowDate >= start && rowDate <= end;
+  });
+
+  // Group data if needed
+  let groupedRows;
+  if (mode === 'monthly' || mode === 'yearly') {
+    const grouped = {};
+    filteredRows.forEach(row => {
+      const date = new Date(row[0]);
+      const key = mode === 'monthly'
+        ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+        : `${date.getFullYear()}`;
+
+      if (!grouped[key]) {
+        grouped[key] = { count: 0, sum: Array(row.length).fill(0), sampleDate: date };
+      }
+
+      for (let i = 1; i < row.length; i++) {
+        grouped[key].sum[i] += row[i];
+      }
+
+      grouped[key].count++;
+    });
+
+    groupedRows = Object.values(grouped).map(group => {
+      const avg = [...group.sum];
+      for (let i = 1; i < avg.length; i++) {
+        avg[i] = group.count ? avg[i] / group.count : 0;
+      }
+      avg[0] = group.sampleDate;
+      return avg;
+    });
+  } else {
+    groupedRows = filteredRows;
+  }
+
+  // Build table
+  const table = document.createElement("table");
+  const thead = document.createElement("thead");
+  const tbody = document.createElement("tbody");
+
+  const headerRow = document.createElement("tr");
+  colIndexes.forEach(i => {
+    const th = document.createElement("th");
+    th.textContent = typeof fullHeader[i] === "object" ? fullHeader[i].label : fullHeader[i];
+    headerRow.appendChild(th);
+  });
+  thead.appendChild(headerRow);
+
+  // Copy buttons under headers (skip Reset Date column)
+  const copyRow = document.createElement("tr");
+  colIndexes.forEach((i, colIdx) => {
+    const thLabel = typeof fullHeader[i] === "object" ? fullHeader[i].label : fullHeader[i];
+    const td = document.createElement("td");
+    if (thLabel === "Reset Date") {
+      // Add the "Copy All" button under Reset Date
+      const btn = document.createElement("button");
+      btn.textContent = "Copy All";
+      btn.className = "copy-all-btn";
+      btn.addEventListener("click", () => {
+        // Copy all table data (excluding copy button row)
+        let data = "";
+        // Header row
+        const headerLabels = colIndexes.map(idx =>
+          typeof fullHeader[idx] === "object" ? fullHeader[idx].label : fullHeader[idx]
+        );
+        data += headerLabels.join("\t") + "\n";
+        // Data rows
+        groupedRows.forEach(row => {
+          const rowData = colIndexes.map(idx => {
+            if (idx === 0) {
+              const date = new Date(row[idx]);
+              return mode === 'yearly'
+                ? date.getFullYear()
+                : mode === 'monthly'
+                  ? date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+                  : date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+            } else {
+              return `${parseFloat(row[idx]).toFixed(2)}%`;
+            }
+          });
+          data += rowData.join("\t") + "\n";
+        });
+        navigator.clipboard.writeText(data).then(() => {
+          alert("All table data copied to clipboard.");
+        });
+      });
+      td.appendChild(btn);
+    } else if (thLabel !== "Reset Date") {
+      const btn = document.createElement("button");
+      btn.textContent = "Copy";
+      btn.className = "copy-col-btn"; 
+      btn.setAttribute("data-col-index", i); 
+      btn.addEventListener("click", () => {
+        const values = groupedRows.map(row => {
+          const val = row[i];
+          if (i === 0) {
+            const date = new Date(val);
+            return mode === 'yearly'
+              ? date.getFullYear()
+              : mode === 'monthly'
+                ? date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+                : date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+          } else {
+            return `${parseFloat(val).toFixed(2)}%`;
+          }
+        });
+        navigator.clipboard.writeText(values.join("\n")).then(() => {
+          alert(`Column ${fullHeader[i]} copied to clipboard.`);
+        });
+      });
+      td.appendChild(btn);
+    }
+    copyRow.appendChild(td);
+  });
+  thead.appendChild(copyRow);
+
+  // Fill table body
+  groupedRows.forEach(row => {
+    const tr = document.createElement("tr");
+    colIndexes.forEach(i => {
+      const td = document.createElement("td");
+      if (i === 0) {
+        const date = new Date(row[i]);
+        td.textContent = mode === 'yearly'
+          ? date.getFullYear()
+          : mode === 'monthly'
+            ? date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+            : date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+      } else {
+        td.textContent = `${parseFloat(row[i]).toFixed(2)}%`;
+      }
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+
+  // Replace table content
+  container.innerHTML = "";
+  table.appendChild(thead);
+  table.appendChild(tbody);
+  container.appendChild(table);
 }
 
 function downloadChartImage() {
@@ -778,182 +1122,6 @@ document.getElementById("sendEmail").addEventListener("click", () => {
   drawChart(currentStartDate, currentEndDate);
 });
 
-function renderForwardCurveTable(startDateInput, endDateInput, mode = 'daily') {
-  if (!transformedData || transformedData.length < 2) {
-    console.warn("No transformed data available.");
-    return;
-  }
-
-  const container = document.getElementById("forwardCurveTableContainer");
-  if (!container) return;
-
-  // Parse safe fallback dates
-  const parseDate = val => {
-    const d = new Date(val);
-    return isNaN(d.getTime()) ? null : d;
-  };
-
-  const startDate = window.currentStartDate || new Date(2019, 0, 1);
-  const endDate = window.currentEndDate || new Date(2025, 11, 31);
-
-  const fullHeader = transformedData[0];
-  const dateIndex = 0;
-
-  // Determine which columns to include
-  const colIndexes = fullHeader.map((label, i) => {
-    if (i === 0 || visibleCheckboxes.includes(label)) return i;
-    return -1;
-  }).filter(i => i !== -1);
-
-  // Filter rows in range
-  const filteredRows = transformedData.slice(1).filter(row => {
-    const rowDate = new Date(row[dateIndex]).setHours(0, 0, 0, 0);
-    const start = new Date(startDate).setHours(0, 0, 0, 0);
-    const end = new Date(endDate).setHours(0, 0, 0, 0);
-    return rowDate >= start && rowDate <= end;
-  });
-
-  // Group data if needed
-  let groupedRows;
-  if (mode === 'monthly' || mode === 'yearly') {
-    const grouped = {};
-    filteredRows.forEach(row => {
-      const date = new Date(row[0]);
-      const key = mode === 'monthly'
-        ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-        : `${date.getFullYear()}`;
-
-      if (!grouped[key]) {
-        grouped[key] = { count: 0, sum: Array(row.length).fill(0), sampleDate: date };
-      }
-
-      for (let i = 1; i < row.length; i++) {
-        grouped[key].sum[i] += row[i];
-      }
-
-      grouped[key].count++;
-    });
-
-    groupedRows = Object.values(grouped).map(group => {
-      const avg = [...group.sum];
-      for (let i = 1; i < avg.length; i++) {
-        avg[i] = group.count ? avg[i] / group.count : 0;
-      }
-      avg[0] = group.sampleDate;
-      return avg;
-    });
-  } else {
-    groupedRows = filteredRows;
-  }
-
-  // Build table
-  const table = document.createElement("table");
-  const thead = document.createElement("thead");
-  const tbody = document.createElement("tbody");
-
-  const headerRow = document.createElement("tr");
-  colIndexes.forEach(i => {
-    const th = document.createElement("th");
-    th.textContent = typeof fullHeader[i] === "object" ? fullHeader[i].label : fullHeader[i];
-    headerRow.appendChild(th);
-  });
-  thead.appendChild(headerRow);
-
-  // Copy buttons under headers (skip Reset Date column)
-  const copyRow = document.createElement("tr");
-  colIndexes.forEach((i, colIdx) => {
-    const thLabel = typeof fullHeader[i] === "object" ? fullHeader[i].label : fullHeader[i];
-    const td = document.createElement("td");
-    if (thLabel === "Reset Date") {
-      // Add the "Copy All" button under Reset Date
-      const btn = document.createElement("button");
-      btn.textContent = "Copy All";
-      btn.className = "copy-all-btn";
-      btn.addEventListener("click", () => {
-        // Copy all table data (excluding copy button row)
-        let data = "";
-        // Header row
-        const headerLabels = colIndexes.map(idx =>
-          typeof fullHeader[idx] === "object" ? fullHeader[idx].label : fullHeader[idx]
-        );
-        data += headerLabels.join("\t") + "\n";
-        // Data rows
-        groupedRows.forEach(row => {
-          const rowData = colIndexes.map(idx => {
-            if (idx === 0) {
-              const date = new Date(row[idx]);
-              return mode === 'yearly'
-                ? date.getFullYear()
-                : mode === 'monthly'
-                  ? date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-                  : date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-            } else {
-              return `${parseFloat(row[idx]).toFixed(2)}%`;
-            }
-          });
-          data += rowData.join("\t") + "\n";
-        });
-        navigator.clipboard.writeText(data).then(() => {
-          alert("All table data copied to clipboard.");
-        });
-      });
-      td.appendChild(btn);
-    } else if (thLabel !== "Reset Date") {
-      const btn = document.createElement("button");
-      btn.textContent = "Copy";
-      btn.className = "copy-col-btn"; 
-      btn.setAttribute("data-col-index", i); 
-      btn.addEventListener("click", () => {
-        const values = groupedRows.map(row => {
-          const val = row[i];
-          if (i === 0) {
-            const date = new Date(val);
-            return mode === 'yearly'
-              ? date.getFullYear()
-              : mode === 'monthly'
-                ? date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-                : date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-          } else {
-            return `${parseFloat(val).toFixed(2)}%`;
-          }
-        });
-        navigator.clipboard.writeText(values.join("\n")).then(() => {
-          alert(`Column ${fullHeader[i]} copied to clipboard.`);
-        });
-      });
-      td.appendChild(btn);
-    }
-    copyRow.appendChild(td);
-  });
-  thead.appendChild(copyRow);
-
-  // Fill table body
-  groupedRows.forEach(row => {
-    const tr = document.createElement("tr");
-    colIndexes.forEach(i => {
-      const td = document.createElement("td");
-      if (i === 0) {
-        const date = new Date(row[i]);
-        td.textContent = mode === 'yearly'
-          ? date.getFullYear()
-          : mode === 'monthly'
-            ? date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-            : date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-      } else {
-        td.textContent = `${parseFloat(row[i]).toFixed(2)}%`;
-      }
-      tr.appendChild(td);
-    });
-    tbody.appendChild(tr);
-  });
-
-  // Replace table content
-  container.innerHTML = "";
-  table.appendChild(thead);
-  table.appendChild(tbody);
-  container.appendChild(table);
-}
-
 document.querySelectorAll(".term-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
     // Toggle .active state
@@ -1047,87 +1215,6 @@ document.getElementById("resetCheckboxesBtn")?.addEventListener("click", () => {
   processDataAndRedraw();
 });
 
-function smoothData(dataArray, windowSize = 5) {
-  if (dataArray.length < 2) return dataArray;
-
-  const header = dataArray[0];
-  const smoothed = [header];
-
-  for (let i = windowSize; i < dataArray.length; i++) {
-    const window = dataArray.slice(i - windowSize, i);
-    const avgRow = [window[window.length - 1][0]]; // keep the latest date
-
-    for (let col = 1; col < header.length; col++) {
-      let sum = 0;
-      let count = 0;
-
-      for (let j = 0; j < window.length; j++) {
-        const val = parseFloat(window[j][col]);
-        if (!isNaN(val)) {
-          sum += val;
-          count++;
-        }
-      }
-
-      avgRow.push(count ? sum / count : null);
-    }
-
-    smoothed.push(avgRow);
-  }
-
-  return smoothed;
-}
-
-function generateYearlyTicks(startDate, endDate) {
-  if (!startDate || !endDate || !(startDate instanceof Date) || !(endDate instanceof Date)) {
-    console.warn("Invalid start or end date passed to generateYearlyTicks");
-    return [];
-  }
-
-  const ticks = [];
-  const startYear = startDate.getFullYear();
-  const endYear = endDate.getFullYear();
-
-  for (let year = startYear; year <= endYear; year++) {
-    ticks.push(new Date(year, 0, 1));
-  }
-
-  return ticks;
-}
-
-function getDateFromInputs(prefix) {
-  const day = document.getElementById(`${prefix}Day`)?.value;
-  const month = document.getElementById(`${prefix}Month`)?.value;
-  const year = document.getElementById(`${prefix}Year`)?.value;
-
-  if (!day || !month || !year) return null;
-
-  const monthNames = {
-    January: 0,
-    February: 1,
-    March: 2,
-    April: 3,
-    May: 4,
-    June: 5,
-    July: 6,
-    August: 7,
-    September: 8,
-    October: 9,
-    November: 10,
-    December: 11
-  };
-
-  const monthIndex = monthNames[month];
-  if (monthIndex === undefined) return null;
-
-  const parsedDay = parseInt(day, 10);
-  const parsedYear = parseInt(year, 10);
-
-  if (isNaN(parsedDay) || isNaN(parsedYear)) return null;
-
-  return new Date(parsedYear, monthIndex, parsedDay);
-}
-
 document.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
   cb.addEventListener("change", () => {
     visibleCheckboxes = Array.from(document.querySelectorAll('input[type="checkbox"]:checked'))
@@ -1139,3 +1226,21 @@ document.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
   });
 });
 
+document.addEventListener("DOMContentLoaded", function () {
+  const historicalToggle = document.getElementById("historicalToggle");
+  const sinceDateInput = document.getElementById("sinceDateInput");
+
+  if (historicalToggle) {
+    historicalToggle.addEventListener("change", () => {
+      console.log("🔁 Historical toggle changed. Reloading data...");
+      loadData(); // ← this is the fix
+    });
+  }
+
+  if (sinceDateInput) {
+    sinceDateInput.addEventListener("change", () => {
+      console.log("📅 Since date changed — redrawing chart");
+      processDataAndRedraw();
+    });
+  }
+});
