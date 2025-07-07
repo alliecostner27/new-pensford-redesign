@@ -316,8 +316,8 @@ function mergeWithHistorical(proj, hist, sinceDate) {
     return proj;
   }
 
-  const projHeaders = proj[0].slice(1); // skip "Reset Date"
-  const histHeaders = hist[0].slice(1); // skip "Reset Date"
+  const projHeaders = proj[0].slice(1); 
+  const histHeaders = hist[0].slice(1); 
   const commonHeaders = projHeaders.filter(label => histHeaders.includes(label));
 
   const dateMap = new Map();
@@ -427,39 +427,49 @@ function drawChart(startDate, endDate) {
     dataArray = smoothData(dataArray, 5);
   }
 
-  // Calculate min and max Y
-  let minY = Infinity;
-  let maxY = -Infinity;
+  // Calculate Y bounds
+  let minY = Infinity, maxY = -Infinity;
   for (let i = 1; i < dataArray.length; i++) {
     for (let j = 1; j < dataArray[i].length; j++) {
       const val = dataArray[i][j];
       if (typeof val === "number" && isFinite(val)) {
-        if (val < minY) minY = val;
-        if (val > maxY) maxY = val;
+        minY = Math.min(minY, val);
+        maxY = Math.max(maxY, val);
       }
     }
   }
   if (!isFinite(minY)) minY = 0;
   if (!isFinite(maxY)) maxY = 1;
-
-  const paddedMinY = minY;
   const paddedMaxY = maxY + (maxY - minY) * 0.05;
 
-  // Add divider only if historical toggle is ON
-  const includeDivider = showHistorical;
-
-  if (includeDivider) {
-    dataArray[0].push("Divider");
-    const numCols = dataArray[0].length;
-    const nulls = Array(numCols - 2).fill(null);
-
-    for (let i = 1; i < dataArray.length; i++) {
-      dataArray[i].push(null);
+  // Add vertical divider only if historical toggle is ON
+  let dividerDate = null;
+  if (showHistorical) {
+    // Use the first projected date to divide
+    const projIndex = fullHeader.findIndex(h => h.includes("(Proj)"));
+    if (projIndex !== -1) {
+      for (let i = 1; i < transformedData.length; i++) {
+        const val = transformedData[i][projIndex];
+        if (typeof val === "number") {
+          dividerDate = transformedData[i][0];
+          break;
+        }
+      }
     }
 
-    const dividerDate = new Date(today);
-    dataArray.push([dividerDate, ...nulls, paddedMinY]);
-    dataArray.push([dividerDate, ...nulls, paddedMaxY]);
+    if (dividerDate instanceof Date) {
+      const dividerLabel = "Divider";
+      dataArray[0].push(dividerLabel);
+      const colCount = dataArray[0].length;
+      const nulls = new Array(colCount - 2).fill(null);
+
+      for (let i = 1; i < dataArray.length; i++) {
+        dataArray[i].push(null);
+      }
+
+      dataArray.push([dividerDate, ...nulls, minY]);
+      dataArray.push([dividerDate, ...nulls, paddedMaxY]);
+    }
   }
 
   try {
@@ -476,11 +486,7 @@ function drawChart(startDate, endDate) {
       focusTarget: 'category',
       tooltip: {
         trigger: 'both',
-        textStyle: {
-          fontName: 'Kanit',
-          fontSize: 12,
-          color: '#333'
-        },
+        textStyle: { fontName: 'Kanit', fontSize: 12, color: '#333' },
         showColorCode: true,
         isHtml: false
       },
@@ -489,10 +495,7 @@ function drawChart(startDate, endDate) {
         format: 'yyyy',
         slantedText: false,
         ticks: generateYearlyTicks(startDate, endDate),
-        viewWindow: {
-          min: startDate,
-          max: endDate
-        },
+        viewWindow: { min: startDate, max: endDate },
         textStyle: { fontSize: 12 },
         gridlines: { color: 'transparent' }
       },
@@ -510,7 +513,7 @@ function drawChart(startDate, endDate) {
 
     const colorMap = {
       "1M Term SOFR": "#1976d2",
-      "3M Term SOFR": "#388e3c",
+      "3M Term SOFR": "#876FD4",
       "30D Average SOFR (NYFED)": "#f57c00",
       "Overnight SOFR": "#6a1b9a",
       "Simple Average SOFR": "#00838f",
@@ -538,20 +541,21 @@ function drawChart(startDate, endDate) {
       let seriesColor = colorMap[baseLabel] || "#000000";
 
       if (isHistoricalOnly) {
-        seriesColor = "#4caf50"; // green
+        seriesColor = "#4caf50";
       } else if (highlightActuals && baseLabel.toLowerCase().includes("actual")) {
-        seriesColor = "#d32f2f"; // red
+        seriesColor = "#d32f2f";
       }
 
       options.series[i - 1] = { color: seriesColor };
     }
 
-    // Final series = divider (only if added)
-    if (includeDivider) {
+    // Divider series (always last)
+    if (showHistorical && dividerDate) {
       options.series[header.length - 2] = {
         color: 'black',
         lineDashStyle: null,
-        lineWidth: 2
+        lineWidth: 2,
+        enableInteractivity: false
       };
     }
 
