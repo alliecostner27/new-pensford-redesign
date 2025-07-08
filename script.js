@@ -248,9 +248,8 @@ function processDataAndRedraw() {
     merged = cleanedProjection;
   }
 
-  // ✅ Archival override
+  // ✅ Overlay archival data for As Of date
   let matchingArchiveRows = [];
-
   if (showArchival && asOfDate instanceof Date && !isNaN(asOfDate.getTime())) {
     const targetDate = asOfDate.toISOString().slice(0, 10);
     const archiveHeader = cleanedArchives[0] || [];
@@ -266,25 +265,53 @@ function processDataAndRedraw() {
         const val = row[asOfIndex];
         if (!val) return false;
         const parsed = val instanceof Date ? val : new Date(val);
-        return parsed instanceof Date && !isNaN(parsed) &&
+        return parsed instanceof Date && !isNaN(parsed.getTime()) &&
                parsed.toISOString().slice(0, 10) === targetDate;
       });
 
       if (matchingArchiveRows.length > 0) {
-        console.log("📁 Using archival data for as-of date:", asOfDate.toISOString().slice(0, 10));
-        merged = [cleanedArchives[0], ...matchingArchiveRows];
+        console.log("📁 Overlaying archival data for as-of date:", asOfDate.toISOString().slice(0, 10));
+
+        const projectionHeader = merged[0];
+        const archivalHeader = archiveHeader.map((label, i) =>
+          i === 0 ? label : `${label} (As Of)`
+        );
+
+        // Build overlay rows
+        const archiveOverlay = matchingArchiveRows.map(archRow => {
+          const dateRaw = archRow[0];
+          const parsedDate = dateRaw instanceof Date ? dateRaw : new Date(dateRaw);
+          const newRow = [parsedDate];
+
+          for (let i = 1; i < projectionHeader.length; i++) {
+            const projLabel = projectionHeader[i];
+            const cleanLabel = projLabel.replace(" (Hist)", "").replace(" (Proj)", "");
+            const archiveIndex = archiveHeader.findIndex(h => h === cleanLabel);
+            if (archiveIndex !== -1) {
+              const val = archRow[archiveIndex];
+              const num = typeof val === "number" ? val : parseFloat(val);
+              newRow.push(!isNaN(num) ? num : null);
+            } else {
+              newRow.push(null);
+            }
+          }
+          return newRow;
+        });
+
+        // Combine headers and rows
+        const finalHeader = [projectionHeader[0], ...projectionHeader.slice(1), ...archivalHeader.slice(1)];
+        const mergedRows = merged.slice(1).map((row, rowIndex) => {
+          const base = row.slice(0);
+          const overlay = archiveOverlay[rowIndex] || [];
+          const overlayVals = overlay.slice(1);
+          return [...base, ...overlayVals];
+        });
+
+        merged = [finalHeader, ...mergedRows];
       } else {
         console.warn("⚠️ No matching archival rows for selected as-of date.");
       }
     }
-  }
-
-  // ✅ Mark archival headers as "(As Of)" for dashed red styling
-  if (showArchival && matchingArchiveRows.length > 0) {
-    const headerRow = merged[0];
-    merged[0] = headerRow.map((label, i) =>
-      i === 0 ? label : `${label} (As Of)`
-    );
   }
 
   if (!merged || merged.length < 2) {
@@ -297,13 +324,26 @@ function processDataAndRedraw() {
     const headerRow = merged[0];
     merged = [headerRow, ...merged.slice(1).filter(row => {
       const date = row[0];
-      return date instanceof Date && date >= sinceDate;
+      const parsed = date instanceof Date ? date : new Date(date);
+      return parsed instanceof Date && !isNaN(parsed.getTime()) && parsed >= sinceDate;
     })];
   }
 
-  transformedData = merged;
+  // ✅ Final cleanup to enforce Date type in column 0
+  const headerRow = merged[0];
+  const cleanedRows = merged.slice(1).filter(row => {
+    const date = row[0];
+    const parsed = date instanceof Date ? date : new Date(date);
+    return parsed instanceof Date && !isNaN(parsed.getTime());
+  }).map(row => {
+    const date = row[0];
+    const parsed = date instanceof Date ? date : new Date(date);
+    return [parsed, ...row.slice(1)];
+  });
 
-  // ✅ Determine chart window
+  transformedData = [headerRow, ...cleanedRows];
+
+  // ✅ Chart window logic
   const earliestDate = transformedData[1]?.[0];
   const fallbackStart = new Date();
   fallbackStart.setFullYear(fallbackStart.getFullYear() - 1);
@@ -322,6 +362,7 @@ function processDataAndRedraw() {
   console.log("🧪 FINAL transformedData HEADERS:", transformedData[0]);
   drawChart(viewStart, viewEnd);
 }
+
 
 function drawChart(startDate, endDate) {
   if (!transformedData || transformedData.length < 2) return;
@@ -348,7 +389,7 @@ function drawChart(startDate, endDate) {
   const filteredIndexes = fullHeader
     .map((label, i) => {
       if (i === 0) return i;
-      const baseLabel = label.replace(" (Hist)", "").replace(" (Proj)", "");
+      const baseLabel = label.replace(" (Hist)", "").replace(" (Proj)", "").replace(" (As Of)", "");
       return visibleCheckboxes.includes(baseLabel) ? i : -1;
     })
     .filter(i => i !== -1);
@@ -460,12 +501,12 @@ function drawChart(startDate, endDate) {
 
     for (let i = 1; i < header.length; i++) {
       const label = header[i];
-      const baseLabel = label.replace(" (Hist)", "").replace(" (Proj)", "");
+      const baseLabel = label.replace(" (Hist)", "").replace(" (Proj)", "").replace(" (As Of)", "");
 
+      const isAsOfOverlay = label.includes("(As Of)");
       let seriesColor = colorMap[baseLabel] || "#000000";
 
-      const isArchiveOnly = showArchival && !label.includes("(Hist)") && !label.includes("(Proj)");
-      if (isArchiveOnly) {
+      if (isAsOfOverlay) {
         options.series[i - 1] = {
           color: "#d32f2f",
           lineDashStyle: [4, 4],
@@ -507,7 +548,6 @@ function drawChart(startDate, endDate) {
     }
   }
 }
-
 
 function mergeWithHistorical(proj, hist, sinceDate) {
   if (!Array.isArray(proj) || proj.length < 2 || !Array.isArray(hist) || hist.length < 2) {
