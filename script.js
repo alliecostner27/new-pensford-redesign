@@ -5,6 +5,7 @@ google.charts.setOnLoadCallback(loadData);
 // === GLOBAL DATASETS ===
 let fullProjectionData = null;    // "Market Expectations" sheet
 let fullHistoricalData = null;    // "Historical/Real" sheet
+let fullArchivesData = null;      // "Archives" sheet 
 let transformedData = [];         // Data sent to chart/table
 let headers = [];                 // Column headers (shared between both)
 
@@ -111,9 +112,11 @@ function loadData() {
     .then(response => {
       const rawProjection = response.projection;
       const rawHistorical = response.historical;
+      const rawArchives = response.archives; 
 
       console.log("rawProjectionData preview:", rawProjection?.slice?.(0, 3));
       console.log("rawHistoricalData preview:", rawHistorical?.slice?.(0, 3));
+      console.log("rawArchivesData preview:", rawArchives?.slice?.(0, 3)); 
 
       if (!Array.isArray(rawProjection)) {
         console.error("'projection' is not a valid array:", rawProjection);
@@ -130,12 +133,14 @@ function loadData() {
           console.error("'historical' is not a valid array:", rawHistorical);
           return;
         }
-
-        fullHistoricalData = transformData(rawHistorical); // required line
+        fullHistoricalData = transformData(rawHistorical);
         console.log("fullHistoricalData rows:", fullHistoricalData?.length);
       } else {
         fullHistoricalData = null;
       }
+
+      // ✅ Only transform archives if valid
+      fullArchivesData = Array.isArray(rawArchives) ? transformData(rawArchives) : [];
 
       processDataAndRedraw();
     })
@@ -257,19 +262,55 @@ function processDataAndRedraw() {
   const sinceDateStr = document.getElementById("sinceDateInput")?.value;
   const sinceDate = sinceDateStr ? new Date(sinceDateStr) : null;
 
+  const showArchival = document.getElementById("archivalToggle")?.checked ?? false;
+  const asOfDateStr = document.getElementById("asOfDate")?.value;
+  const asOfDate = asOfDateStr ? new Date(asOfDateStr) : null;
+
   console.log("📌 showHistorical toggle?", showHistorical);
   console.log("📅 sinceDate input:", sinceDateStr, "| parsed:", sinceDate);
+  console.log("📌 archival toggle?", showArchival);
+  console.log("📅 asOfDate input:", asOfDateStr, "| parsed:", asOfDate);
 
   let cleanedProjection = Array.isArray(fullProjectionData) ? fullProjectionData : [];
   let cleanedHistorical = Array.isArray(fullHistoricalData) ? fullHistoricalData : [];
+  let cleanedArchives = Array.isArray(fullArchivesData) ? fullArchivesData : [];
 
   console.log("📦 cleanedProjection", cleanedProjection?.slice?.(0, 3));
   console.log("📦 cleanedHistorical", cleanedHistorical?.slice?.(0, 3));
+  console.log("📦 cleanedArchives", cleanedArchives?.slice?.(0, 3));
 
   let merged = [];
-  const shouldMerge = showHistorical && cleanedHistorical.length > 1;
 
-  if (shouldMerge) {
+  function normalizeDate(date) {
+    return date?.toISOString()?.split?.("T")?.[0];
+  }
+
+  if (showArchival && asOfDate instanceof Date && !isNaN(asOfDate.getTime())) {
+    const asOfStr = normalizeDate(asOfDate);
+    console.log("📁 Using archival data for as-of date:", asOfDate, "| normalized:", asOfStr);
+
+    const archiveHeader = cleanedArchives[0];
+    const rawArchives = cleanedArchives.slice(1);
+
+    const filtered = rawArchives.filter(row => normalizeDate(new Date(row[0])) === asOfStr);
+
+    if (filtered.length > 0) {
+      console.log(`📦 matched archival rows for ${asOfStr}:`, filtered.length);
+      // Remove the as-of column (first col), keep reset date + series
+      merged = [
+        ["Reset Date", ...archiveHeader.slice(2)],
+        ...filtered.map(row => [new Date(row[1]), ...row.slice(2).map(val => {
+          const parsed = typeof val === "string" ? parseFloat(val.replace("%", "")) / 100 : val;
+          return isNaN(parsed) ? null : parsed;
+        })])
+      ];
+    } else {
+      console.warn("⚠️ No matching archival rows for selected as-of date.");
+      document.getElementById("chart_div").innerHTML =
+        "<p style='color:red;'>No archival data found for the selected As Of date.</p>";
+      return;
+    }
+  } else if (showHistorical && cleanedHistorical.length > 1) {
     console.log("✅ Running mergeWithHistorical");
     merged = mergeWithHistorical(cleanedProjection, cleanedHistorical, sinceDate);
   } else {
@@ -417,11 +458,12 @@ function drawChart(startDate, endDate) {
 
   const showHistorical = document.getElementById("historicalToggle")?.checked ?? false;
   const highlightActuals = document.getElementById("actualsToggle")?.checked ?? false;
+  const showArchival = document.getElementById("archivalToggle")?.checked ?? false;
 
   const filteredIndexes = fullHeader
     .map((label, i) => {
       if (i === 0) return i;
-      const baseLabel = label.replace(" (Hist)", "").replace(" (Proj)", "");
+      const baseLabel = label.replace(" (Hist)", "").replace(" (Proj)", "").replace(" (Archival)", "");
       return visibleCheckboxes.includes(baseLabel) ? i : -1;
     })
     .filter(i => i !== -1);
@@ -481,7 +523,7 @@ function drawChart(startDate, endDate) {
       legend: { position: 'none' },
       chartArea: { width: '85%', height: '70%' },
       lineWidth: 2,
-      focusTarget: 'category', 
+      focusTarget: 'category',
       tooltip: {
         trigger: 'both',
         textStyle: {
@@ -493,9 +535,9 @@ function drawChart(startDate, endDate) {
         isHtml: false
       },
       crosshair: {
-        trigger: 'selection',       // Only show line on hover of a point
+        trigger: 'selection',
         orientation: 'vertical',
-        color: '#000000'             
+        color: '#000000'
       },
       hAxis: {
         title: 'Date',
@@ -518,7 +560,7 @@ function drawChart(startDate, endDate) {
         textPosition: 'out',
         minorGridlines: { color: 'transparent' }
       },
-      series: {} 
+      series: {}
     };
 
     const colorMap = {
@@ -534,7 +576,8 @@ function drawChart(startDate, endDate) {
 
     for (let i = 1; i < header.length; i++) {
       const label = header[i];
-      const baseLabel = label.replace(" (Hist)", "").replace(" (Proj)", "");
+      const baseLabel = label.replace(" (Hist)", "").replace(" (Proj)", "").replace(" (Archival)", "");
+      const isArchival = label.includes(" (Archival)");
       let hasHistorical = false;
       let hasProjection = false;
 
@@ -549,14 +592,23 @@ function drawChart(startDate, endDate) {
 
       const isHistoricalOnly = showHistorical && hasHistorical && !hasProjection;
       let seriesColor = colorMap[baseLabel] || "#000000";
+      let seriesStyle = {};
 
       if (isHistoricalOnly) {
-        seriesColor = "#4caf50"; // green
+        seriesStyle = { color: "#4caf50" };
       } else if (highlightActuals && baseLabel.toLowerCase().includes("actual")) {
-        seriesColor = "#d32f2f"; // red
+        seriesStyle = { color: "#d32f2f" };
+      } else if (showArchival && isArchival) {
+        seriesStyle = {
+          color: "#888888",
+          lineDashStyle: [4, 4],
+          lineWidth: 2
+        };
+      } else {
+        seriesStyle = { color: seriesColor };
       }
 
-      options.series[i - 1] = { color: seriesColor };
+      options.series[i - 1] = seriesStyle;
     }
 
     if (includeDivider) {
